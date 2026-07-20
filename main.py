@@ -1,9 +1,9 @@
-
 import os
 import re
 import cv2
 import pytesseract
 import sqlite3
+from difflib import get_close_matches
 
 # ----------------------------
 # Configuration
@@ -32,6 +32,7 @@ cur.execute("""
 CREATE TABLE IF NOT EXISTS items(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     store TEXT,
+    full_address TEXT,
     date TEXT,
     raw_name TEXT,
     clean_name TEXT,
@@ -41,14 +42,17 @@ CREATE TABLE IF NOT EXISTS items(
 
 cur.execute("""
 CREATE UNIQUE INDEX IF NOT EXISTS idx_items
-ON items(store, date, clean_name, price)
+ON items(store, full_address, date, clean_name, price)
 """)
 
 # ----------------------------
 # Regular Expressions
 # ----------------------------
 
-price_pattern = re.compile(r"(.+?)\s+(\d+\.\d{2})(?:\s*[A-Z*]+)?$")
+price_pattern = re.compile(
+    r"(.+?)\s+\$?(\d{1,3}[.,]\d{2,3})(?:\s*[A-Z*]+)?$",
+    re.IGNORECASE
+)
 date_pattern = re.compile(
         r'(?:\b\d{4}[-/\.]\d{1,2}[-/\.]\d{1,2}\b|'
         r'\b\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}\b|'
@@ -61,6 +65,38 @@ ignore_words = {
     "cash", "visa", "mastercard", "debit", "credit",
     "balance", "payment", "amount", "thank", "items",
     "sale", "discount", "coupon"
+}
+# ---------------------------
+#  Store Names/Other info
+#----------------------------
+STORE_NAMES = {
+    "WALMART": "Walmart",
+    "WAL-MART": "Walmart",
+    "WAL MART": "Walmart",
+    "WM SUPERCENTER": "Walmart",
+
+    "COSTCO": "Costco",
+    "COSTCO WHOLESALE": "Costco",
+
+    "WINCO": "WinCo Foods",
+    "WINCO FOODS": "WinCo Foods",
+
+    "SAFEWAY": "Safeway",
+
+    "FRED MEYER": "Fred Meyer",
+
+    "TARGET": "Target",
+
+    "ALBERTSONS": "Albertsons",
+
+    "SMITHS": "Smith's",
+
+    "KROGER": "Kroger",
+
+    "TRADER JOES": "Trader Joe's",
+    "TRADER JOE'S": "Trader Joe's",
+
+    "WHOLE FOODS": "Whole Foods Market",
 }
 
 # ----------------------------
@@ -144,6 +180,9 @@ for filename in os.listdir(RECEIPT_FOLDER):
     # see tesseract --help-psm for more help
     text = pytesseract.image_to_string(gray, config=custom_config)
 
+    text = text.replace("$ ", "$")
+    text = text.replace(" ,", ",")
+    text = text.replace(" .", ".")
     # Save raw OCR for debugging / dataset building
     with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
         f.write(f"\n--- {filename} ---\n{text}\n")
@@ -157,18 +196,76 @@ for filename in os.listdir(RECEIPT_FOLDER):
     # ----------------------------
     # Store detection (best guess)
     # ----------------------------
+    known_stores = list(STORE_NAMES.keys())
 
-    store = lines[0]
+    store = "Unknown"
 
-    for line in lines[:5]:
-      if (
-        line.isupper()
-        and len(line)<30
-        and not any(char.isdigit() for char in line)
-      ):
-         store = line
-         break
+    for line in lines[:20]:
+        clean = clean_item_name(line)
+
+        #finds exact name
+        for key, value in STORE_NAMES.items():
+            if key in clean:
+                 store = value
+                 break
+        if store != "Unknown":
+            break
+    #fuzzy fall back
+        match = get_close_matches(clean, known_stores, n=1, cutoff = 0.60)
+
+        if match:
+           store = STORE_NAMES[match[0]]
+           break
     print(f"{store}")
+# ----------------------------
+# Store Address Detection
+# ----------------------------
+
+    address = ""
+    city_state = ""
+    full_address = ""
+
+# A line starting with a street number
+    address_pattern = re.compile(
+        r'^\d{1,6}\s+[A-Z0-9 .#-]+$',
+        re.IGNORECASE
+    )
+
+# City, State ZIP
+    city_pattern = re.compile(
+        r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$',
+        re.IGNORECASE
+    )
+
+    for i, line in enumerate(lines[:20]):
+
+        if address_pattern.match(line):
+
+        # Avoid picking up phone numbers or transaction numbers
+            if any(x in line.upper() for x in [
+                "ST#", "OP#", "TR", "TEL", "PHONE"
+            ]):
+                continue
+
+            address = line
+
+        # The next line is usually city/state/zip
+            if i + 1 < len(lines):
+                possible_city = lines[i + 1]
+
+                if city_pattern.match(possible_city):
+                    city_state = possible_city
+
+            break
+
+
+    if address:
+        full_address = address
+
+    if city_state:
+        full_address += ", " + city_state
+
+    print(f"Address: {full_address}")
 
     # ----------------------------
     # Date detection
@@ -199,25 +296,24 @@ for filename in os.listdir(RECEIPT_FOLDER):
             continue
 
         item_raw = match.group(1).strip()
-        price = float(match.group(2))
+        price_text = match.group(2)
 
-        if len(item_raw) < 2:
-            continue
+# Fix OCR comma decimals
+        price_text = price_text.replace(",", ".")
 
-        if is_ignored(item_raw):
-            continue
+# Fix OCR adding an extra digit after decimal
+        if len(price_text.split(".")[1]) == 3:
+            price_text = price_text[:-1]
 
+        price = float(price_text)
         clean_name = clean_item_name(item_raw)
-
-        if len(clean_name) < 2:
-            continue
-
         cur.execute("""
             INSERT OR IGNORE INTO items
-            (store, date, raw_name, clean_name, price)
-            VALUES (?, ?, ?, ?, ?)
+            (store, full_address, date, raw_name, clean_name, price)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
             store,
+            full_address,
             receipt_date,
             item_raw,
             clean_name,
