@@ -171,28 +171,41 @@ for filename in os.listdir(RECEIPT_FOLDER):
         cv2.THRESH_BINARY + cv2.THRESH_OTSU
       )[1]
 
-    # ----------------------------
-    # OCR
-    # ----------------------------
+# ----------------------------
+# OCR (Multi-PSM Fallback Loop)
+# ----------------------------
 
-    custom_config = "--psm 6"
-    # --psm 4 for sparse/scattered text, --psm 6 for single blocks  --psm4 for multisized text in single coloumn
-    # see tesseract --help-psm for more help
-    text = pytesseract.image_to_string(gray, config=custom_config)
+text = ""
+lines = []
+    
+# Try different Page Segmentation Modes to get the best result
+for psm in ["6", "4", "11", "5"]:
+    custom_config = f"--psm {psm}"
+    # --psm 4: sparse text, --psm 6: single uniform block, --psm 11: sparse text randomly placed
+        
+    attempt_text = pytesseract.image_to_string(gray, config=custom_config)
+        
+    # Clean formatting artifacts
+    attempt_text = attempt_text.replace("$ ", "$")
+    attempt_text = attempt_text.replace(" ,", ",")
+    attempt_text = attempt_text.replace(" .", ".")
+        
+    attempt_lines = [line.strip() for line in attempt_text.split("\n") if line.strip()]
+        
+    # If we successfully extracted lines of text, save it and stop looping
+    if attempt_lines:
+        text = attempt_text
+        lines = attempt_lines
+        print(f"  Successfully extracted text using --psm {psm}")
+        break
 
-    text = text.replace("$ ", "$")
-    text = text.replace(" ,", ",")
-    text = text.replace(" .", ".")
-    # Save raw OCR for debugging / dataset building
-    with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-        f.write(f"\n--- {filename} ---\n{text}\n")
+# Save raw OCR for debugging / dataset building
+with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n--- {filename} ---\n{text}\n")
 
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-
-    if not lines:
-        print("  No text found.")
-        continue
-
+if not lines:
+    print("  No text found across any PSM settings.")
+    continue
     # ----------------------------
     # Store detection (best guess)
     # ----------------------------
