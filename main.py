@@ -122,46 +122,46 @@ for filename in os.listdir(RECEIPT_FOLDER):
         print("  Could not read image.")
         continue
 
-    # ----------------------------
-    # Preprocessing (Fixed Tuple Bug)
-    # ----------------------------
+# ----------------------------
+# Preprocessing (Fixed Tuple Bug)
+# ----------------------------
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    gray = cv2.fastNlMeansDenoising(gray)
+gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+gray = cv2.fastNlMeansDenoising(gray)
     
-    # [1] is mandatory here to extract just the thresholded image array
-    gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+# [1] is mandatory here to extract just the thresholded image array
+gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
-    # ----------------------------
-    # OCR (Multi-PSM Fallback Loop)
-    # ----------------------------
+# ----------------------------
+# OCR (Multi-PSM Fallback Loop)
+# ----------------------------
 
-    text = ""
-    lines = []
+text = ""
+lines = []
         
-    for psm in ["6", "4", "11", "5"]:
-        custom_config = f"--psm {psm}"
-        attempt_text = pytesseract.image_to_string(gray, config=custom_config)
+for psm in ["6", "4", "11", "5"]:
+    custom_config = f"--psm {psm}"
+    attempt_text = pytesseract.image_to_string(gray, config=custom_config)
             
-        attempt_text = attempt_text.replace("$ ", "$")
-        attempt_text = attempt_text.replace(" ,", ",")
-        attempt_text = attempt_text.replace(" .", ".")
+    attempt_text = attempt_text.replace("$ ", "$")
+    attempt_text = attempt_text.replace(" ,", ",")
+    attempt_text = attempt_text.replace(" .", ".")
             
-        attempt_lines = [line.strip() for line in attempt_text.split("\n") if line.strip()]
+    attempt_lines = [line.strip() for line in attempt_text.split("\n") if line.strip()]
             
-        if attempt_lines:
-            text = attempt_text
-            lines = attempt_lines
-            print(f"  Successfully extracted text using --psm {psm}")
-            break
+    if attempt_lines:
+        text = attempt_text
+        lines = attempt_lines
+        print(f"  Successfully extracted text using --psm {psm}")
+        break
 
-    with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-        f.write(f"\n--- {filename} ---\n{text}\n")
+with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+    f.write(f"\n--- {filename} ---\n{text}\n")
 
-    if not lines:
-        print("  No text found across any PSM settings.")
-        continue
+if not lines:
+    print("  No text found across any PSM settings.")
+    continue
 
 # -------------------------------------------------------------
 # ALL BLOCKS BELOW ARE NOW UNINDENTED BY ONE LEVEL (OUT OF PSM LOOP)
