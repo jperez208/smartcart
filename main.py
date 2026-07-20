@@ -205,22 +205,22 @@ with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
 
 if not lines:
     print("  No text found across any PSM settings.")
-continue
-    # ----------------------------
-    # Store detection (best guess)
-    # ----------------------------
-    known_stores = list(STORE_NAMES.keys())
+    continue
+# ----------------------------
+# Store detection (best guess)
+# ----------------------------
+known_stores = list(STORE_NAMES.keys())
 
-    store = "Unknown"
+store = "Unknown"
 
-    for line in lines[:20]:
-        clean = clean_item_name(line)
+for line in lines[:20]:
+    clean = clean_item_name(line)
 
-        #finds exact name
-        for key, value in STORE_NAMES.items():
-            if key in clean:
-                 store = value
-                 break
+    #finds exact name
+    for key, value in STORE_NAMES.items():
+        if key in clean:
+            store = value
+            break
         if store != "Unknown":
             break
     #fuzzy fall back
