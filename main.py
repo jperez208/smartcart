@@ -122,165 +122,161 @@ for filename in os.listdir(RECEIPT_FOLDER):
         print("  Could not read image.")
         continue
 
-# ----------------------------
-# Preprocessing (Fixed Tuple Bug)
-# ----------------------------
+    # ----------------------------
+    # Preprocessing (Properly Indented)
+    # ----------------------------
 
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-gray = cv2.fastNlMeansDenoising(gray)
-    
-# [1] is mandatory here to extract just the thresholded image array
-gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-
-# ----------------------------
-# OCR (Multi-PSM Fallback Loop)
-# ----------------------------
-
-text = ""
-lines = []
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.fastNlMeansDenoising(gray)
         
-for psm in ["6", "4", "11", "5"]:
-    custom_config = f"--psm {psm}"
-    attempt_text = pytesseract.image_to_string(gray, config=custom_config)
+    # Extraction of the thresholded image array
+    gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+
+    # ----------------------------
+    # OCR (Multi-PSM Fallback Loop)
+    # ----------------------------
+
+    text = ""
+    lines = []
             
-    attempt_text = attempt_text.replace("$ ", "$")
-    attempt_text = attempt_text.replace(" ,", ",")
-    attempt_text = attempt_text.replace(" .", ".")
-            
-    attempt_lines = [line.strip() for line in attempt_text.split("\n") if line.strip()]
-            
-    if attempt_lines:
-        text = attempt_text
-        lines = attempt_lines
-        print(f"  Successfully extracted text using --psm {psm}")
-        break
-
-with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-    f.write(f"\n--- {filename} ---\n{text}\n")
-
-if not lines:
-    print("  No text found across any PSM settings.")
-    continue
-
-# -------------------------------------------------------------
-# ALL BLOCKS BELOW ARE NOW UNINDENTED BY ONE LEVEL (OUT OF PSM LOOP)
-# -------------------------------------------------------------
-
-# ----------------------------
-# Store detection (best guess)
-# ----------------------------
-known_stores = list(STORE_NAMES.keys())
-store = "Unknown"
-
-for line in lines[:20]:
-    clean = clean_item_name(line)
-
-    for key, value in STORE_NAMES.items():
-        if key in clean:
-            store = value
+    for psm in ["6", "4", "11", "5"]:
+        custom_config = f"--psm {psm}"
+        attempt_text = pytesseract.image_to_string(gray, config=custom_config)
+                
+        attempt_text = attempt_text.replace("$ ", "$")
+        attempt_text = attempt_text.replace(" ,", ",")
+        attempt_text = attempt_text.replace(" .", ".")
+                
+        attempt_lines = [line.strip() for line in attempt_text.split("\n") if line.strip()]
+                
+        if attempt_lines:
+            text = attempt_text
+            lines = attempt_lines
+            print(f"  Successfully extracted text using --psm {psm}")
             break
-    if store != "Unknown":
-        break
-            
-    match = get_close_matches(clean, known_stores, n=1, cutoff=0.60)
-    if match:
-        store = STORE_NAMES[match[0]]
-        break
-            
-print(f"Store: {store}")
 
-# ----------------------------
-# Store Address Detection
-# ----------------------------
+    with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+        f.write(f"\n--- {filename} ---\n{text}\n")
 
-address = ""
-city_state = ""
-full_address = ""
+    if not lines:
+        print("  No text found across any PSM settings.")
+        continue
 
-address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
-city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
+    # ----------------------------
+    # Store detection (best guess)
+    # ----------------------------
+    known_stores = list(STORE_NAMES.keys())
+    store = "Unknown"
 
-for i, line in enumerate(lines[:20]):
-    if address_pattern.match(line):
-        if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
+    for line in lines[:20]:
+        clean = clean_item_name(line)
+
+        for key, value in STORE_NAMES.items():
+            if key in clean:
+                store = value
+                break
+        if store != "Unknown":
+            break
+                
+        match = get_close_matches(clean, known_stores, n=1, cutoff=0.60)
+        if match:
+            store = STORE_NAMES[match[0]]
+            break
+                
+    print(f"Store: {store}")
+
+    # ----------------------------
+    # Store Address Detection
+    # ----------------------------
+
+    address = ""
+    city_state = ""
+    full_address = ""
+
+    address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
+    city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
+
+    for i, line in enumerate(lines[:20]):
+        if address_pattern.match(line):
+            if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
+                continue
+            address = line
+
+            if i + 1 < len(lines):
+                possible_city = lines[i + 1]
+                if city_pattern.match(possible_city):
+                    city_state = possible_city
+            break
+
+    if address:
+        full_address = address
+    if city_state:
+        full_address += ", " + city_state
+
+    print(f"Address: {full_address}")
+
+    # ----------------------------
+    # Date detection
+    # ----------------------------
+
+    receipt_date = ""
+    receipt_dates = []
+
+    for line in lines:
+        match = date_pattern.search(line)
+        if match:
+            receipt_dates.append(match.group())
+                
+    receipt_date = receipt_dates[0] if receipt_dates else ""
+    if receipt_date:
+        print(f"Date: {receipt_date}")
+    else:
+        print("No Date Found")
+
+    # ----------------------------
+    # Item extraction
+    # ----------------------------
+
+    for line in lines:
+        match = price_pattern.search(line)
+        if not match:
             continue
-        address = line
 
-        if i + 1 < len(lines):
-            possible_city = lines[i + 1]
-            if city_pattern.match(possible_city):
-                city_state = possible_city
-        break
+        item_raw = match.group(1).strip()
+        price_text = match.group(2)
 
-if address:
-    full_address = address
-if city_state:
-    full_address += ", " + city_state
-
-print(f"Address: {full_address}")
-
-# ----------------------------
-# Date detection
-# ----------------------------
-
-receipt_date = ""
-receipt_dates = []
-
-for line in lines:
-    match = date_pattern.search(line)
-    if match:
-        receipt_dates.append(match.group())
-            
-receipt_date = receipt_dates[0] if receipt_dates else ""
-if receipt_date:
-    print(f"Date: {receipt_date}")
-else:
-    print("No Date Found")
-
-# ----------------------------
-# Item extraction
-# ----------------------------
-
-for line in lines:
-    match = price_pattern.search(line)
-    if not match:
-        continue
-
-    item_raw = match.group(1).strip()
-    price_text = match.group(2)
-
-    if is_ignored(item_raw):
-        continue
-
-    price_text = price_text.replace(",", ".")
-
-    if len(price_text.split(".")) == 3:
-        price_text = price_text[:-1]
-
-    try:
-        price = float(price_text)
-        clean_name = clean_item_name(item_raw)
-            
-        if not clean_name:
+        if is_ignored(item_raw):
             continue
 
-        cur.execute("""
-            INSERT OR IGNORE INTO items
-            (store, full_address, date, raw_name, clean_name, price)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (store, full_address, receipt_date, item_raw, clean_name, price))
+        price_text = price_text.replace(",", ".")
 
-        print(f"  {clean_name} -> ${price:.2f}")
-    except Exception as e:
-        print(f"  Error parsing row data: {e}")
-        continue
+        if len(price_text.split(".")) == 3:
+            price_text = price_text[:-1]
+
+        try:
+            price = float(price_text)
+            clean_name = clean_item_name(item_raw)
+                
+            if not clean_name:
+                continue
+
+            cur.execute("""
+                INSERT OR IGNORE INTO items
+                (store, full_address, date, raw_name, clean_name, price)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (store, full_address, receipt_date, item_raw, clean_name, price))
+
+            print(f"  {clean_name} -> ${price:.2f}")
+        except Exception as e:
+            print(f"  Error parsing row data: {e}")
+            continue
+
+    # Commit changes per receipt
+    conn.commit()
 
 # ----------------------------
-# Save database
+# Close database (Moved outside the loop)
 # ----------------------------
-
-conn.commit()
 conn.close()
-
 print("\nDone.")
