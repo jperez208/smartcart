@@ -205,7 +205,7 @@ with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
 
 if not lines:
     print("  No text found across any PSM settings.")
-    continue
+continue
     # ----------------------------
     # Store detection (best guess)
     # ----------------------------
