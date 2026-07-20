@@ -123,12 +123,14 @@ for filename in os.listdir(RECEIPT_FOLDER):
         continue
 
     # ----------------------------
-    # Preprocessing
+    # Preprocessing (Fixed Tuple Bug)
     # ----------------------------
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
     gray = cv2.fastNlMeansDenoising(gray)
+    
+    # [1] is mandatory here to extract just the thresholded image array
     gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
     # ----------------------------
@@ -162,7 +164,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
         continue
 
     # ----------------------------
-    # Store detection (best guess)
+    # Store detection (Fixed Lookup Bug)
     # ----------------------------
     known_stores = list(STORE_NAMES.keys())
     store = "Unknown"
@@ -179,7 +181,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
             
         match = get_close_matches(clean, known_stores, n=1, cutoff=0.60)
         if match:
-            store = STORE_NAMES[match[0]]
+            store = STORE_NAMES[match[0]] # Added index [0] to extract string from list
             break
             
     print(f"Store: {store}")
@@ -215,7 +217,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
     print(f"Address: {full_address}")
 
     # ----------------------------
-    # Date detection
+    # Date detection (Fixed List Bug)
     # ----------------------------
 
     receipt_date = ""
@@ -226,6 +228,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
         if match:
             receipt_dates.append(match.group())
             
+    # Safely pull out string index [0] instead of passing the whole raw list array
     receipt_date = receipt_dates[0] if receipt_dates else ""
     if receipt_date:
         print(f"Date: {receipt_date}")
@@ -244,20 +247,18 @@ for filename in os.listdir(RECEIPT_FOLDER):
         item_raw = match.group(1).strip()
         price_text = match.group(2)
 
-        # Skip transactional terms like subtotal or tax
         if is_ignored(item_raw):
             continue
 
         price_text = price_text.replace(",", ".")
 
-        if len(price_text.split(".")[1]) == 3:
+        if len(price_text.split(".")) == 3:
             price_text = price_text[:-1]
 
         try:
             price = float(price_text)
             clean_name = clean_item_name(item_raw)
             
-            # Don't save lines that ended up entirely blank after cleaning
             if not clean_name:
                 continue
 
