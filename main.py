@@ -1,3 +1,4 @@
+
 import os
 import re
 import cv2
@@ -36,6 +37,11 @@ CREATE TABLE IF NOT EXISTS items(
     clean_name TEXT,
     price REAL
 )
+""")
+
+cur.execute("""
+CREATE UNIQUE INDEX IF NOT EXISTS idx_items
+ON items(store, date, clean_name, price)
 """)
 
 # ----------------------------
@@ -133,8 +139,9 @@ for filename in os.listdir(RECEIPT_FOLDER):
     # OCR
     # ----------------------------
 
-    custom_config = "--psm 4" # -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$/-,$: "
-
+    custom_config = "--psm 6"
+    # --psm 4 for sparse/scattered text, --psm 6 for single blocks  --psm4 for multisized text in single coloumn
+    # see tesseract --help-psm for more help
     text = pytesseract.image_to_string(gray, config=custom_config)
 
     # Save raw OCR for debugging / dataset building
@@ -206,7 +213,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
             continue
 
         cur.execute("""
-            INSERT INTO items
+            INSERT OR IGNORE INTO items
             (store, date, raw_name, clean_name, price)
             VALUES (?, ?, ?, ?, ?)
         """, (
