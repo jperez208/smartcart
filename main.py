@@ -129,7 +129,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
 
     if image is None:
         print("  Could not read image.")
-        continue
+    continue
 
     # ----------------------------
     # Preprocessing
