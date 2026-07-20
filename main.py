@@ -163,115 +163,118 @@ for filename in os.listdir(RECEIPT_FOLDER):
         print("  No text found across any PSM settings.")
         continue
 
-    # ----------------------------
-    # Store detection (Fixed Lookup Bug)
-    # ----------------------------
-    known_stores = list(STORE_NAMES.keys())
-    store = "Unknown"
+# -------------------------------------------------------------
+# ALL BLOCKS BELOW ARE NOW UNINDENTED BY ONE LEVEL (OUT OF PSM LOOP)
+# -------------------------------------------------------------
 
-    for line in lines[:20]:
-        clean = clean_item_name(line)
+# ----------------------------
+# Store detection (best guess)
+# ----------------------------
+known_stores = list(STORE_NAMES.keys())
+store = "Unknown"
 
-        for key, value in STORE_NAMES.items():
-            if key in clean:
-                store = value
-                break
-        if store != "Unknown":
+for line in lines[:20]:
+    clean = clean_item_name(line)
+
+    for key, value in STORE_NAMES.items():
+        if key in clean:
+            store = value
             break
+    if store != "Unknown":
+        break
             
-        match = get_close_matches(clean, known_stores, n=1, cutoff=0.60)
-        if match:
-            store = STORE_NAMES[match[0]] # Added index [0] to extract string from list
-            break
+    match = get_close_matches(clean, known_stores, n=1, cutoff=0.60)
+    if match:
+        store = STORE_NAMES[match[0]]
+        break
             
-    print(f"Store: {store}")
+print(f"Store: {store}")
 
-    # ----------------------------
-    # Store Address Detection
-    # ----------------------------
+# ----------------------------
+# Store Address Detection
+# ----------------------------
 
-    address = ""
-    city_state = ""
-    full_address = ""
+address = ""
+city_state = ""
+full_address = ""
 
-    address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
-    city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
+address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
+city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
 
-    for i, line in enumerate(lines[:20]):
-        if address_pattern.match(line):
-            if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
-                continue
-            address = line
+for i, line in enumerate(lines[:20]):
+    if address_pattern.match(line):
+        if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
+            continue
+        address = line
 
-            if i + 1 < len(lines):
-                possible_city = lines[i + 1]
-                if city_pattern.match(possible_city):
-                    city_state = possible_city
-            break
+        if i + 1 < len(lines):
+            possible_city = lines[i + 1]
+            if city_pattern.match(possible_city):
+                city_state = possible_city
+        break
 
-    if address:
-        full_address = address
-    if city_state:
-        full_address += ", " + city_state
+if address:
+    full_address = address
+if city_state:
+    full_address += ", " + city_state
 
-    print(f"Address: {full_address}")
+print(f"Address: {full_address}")
 
-    # ----------------------------
-    # Date detection (Fixed List Bug)
-    # ----------------------------
+# ----------------------------
+# Date detection
+# ----------------------------
 
-    receipt_date = ""
-    receipt_dates = []
+receipt_date = ""
+receipt_dates = []
 
-    for line in lines:
-        match = date_pattern.search(line)
-        if match:
-            receipt_dates.append(match.group())
+for line in lines:
+    match = date_pattern.search(line)
+    if match:
+        receipt_dates.append(match.group())
             
-    # Safely pull out string index [0] instead of passing the whole raw list array
-    receipt_date = receipt_dates[0] if receipt_dates else ""
-    if receipt_date:
-        print(f"Date: {receipt_date}")
-    else:
-        print("No Date Found")
+receipt_date = receipt_dates[0] if receipt_dates else ""
+if receipt_date:
+    print(f"Date: {receipt_date}")
+else:
+    print("No Date Found")
 
-    # ----------------------------
-    # Item extraction
-    # ----------------------------
+# ----------------------------
+# Item extraction
+# ----------------------------
 
-    for line in lines:
-        match = price_pattern.search(line)
-        if not match:
+for line in lines:
+    match = price_pattern.search(line)
+    if not match:
+        continue
+
+    item_raw = match.group(1).strip()
+    price_text = match.group(2)
+
+    if is_ignored(item_raw):
+        continue
+
+    price_text = price_text.replace(",", ".")
+
+    if len(price_text.split(".")) == 3:
+        price_text = price_text[:-1]
+
+    try:
+        price = float(price_text)
+        clean_name = clean_item_name(item_raw)
+            
+        if not clean_name:
             continue
 
-        item_raw = match.group(1).strip()
-        price_text = match.group(2)
+        cur.execute("""
+            INSERT OR IGNORE INTO items
+            (store, full_address, date, raw_name, clean_name, price)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (store, full_address, receipt_date, item_raw, clean_name, price))
 
-        if is_ignored(item_raw):
-            continue
-
-        price_text = price_text.replace(",", ".")
-
-        if len(price_text.split(".")) == 3:
-            price_text = price_text[:-1]
-
-        try:
-            price = float(price_text)
-            clean_name = clean_item_name(item_raw)
-            
-            if not clean_name:
-                continue
-
-            cur.execute("""
-                INSERT OR IGNORE INTO items
-                (store, full_address, date, raw_name, clean_name, price)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (store, full_address, receipt_date, item_raw, clean_name, price))
-
-            print(f"  {clean_name} -> ${price:.2f}")
-        except Exception as e:
-            print(f"  Error parsing row data: {e}")
-            continue
+        print(f"  {clean_name} -> ${price:.2f}")
+    except Exception as e:
+        print(f"  Error parsing row data: {e}")
+        continue
 
 # ----------------------------
 # Save database
