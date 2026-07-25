@@ -446,7 +446,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
         """,
         (
             store,
-            "",
+            full_address,
             receipt_date,
             raw_name,
             clean,
