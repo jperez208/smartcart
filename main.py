@@ -308,10 +308,10 @@ for filename in os.listdir(RECEIPT_FOLDER):
     ]
 
 
-    print("\nFINAL OCR:")
+#    print("\nFINAL OCR:")
 
-    for line in lines:
-        print(line)
+ #   for line in lines:
+  #      print(line)
 
 
 
