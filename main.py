@@ -120,8 +120,6 @@ def clean_item_name(name):
 
     return name.strip()
 
-
-
 def ignored(line):
 
     upper = line.upper()
@@ -147,10 +145,7 @@ def normalize_price(value):
 def score_ocr(text):
 
     score = 0
-
     upper = text.upper()
-
-
     good = [
         "TOTAL",
         "SUBTOTAL",
@@ -158,15 +153,11 @@ def score_ocr(text):
         "$",
         "WALMART"
     ]
-
-
     bad = [
         "eeee",
         "||||",
         "~~~~"
     ]
-
-
     for x in good:
 
         if x in upper:
@@ -306,15 +297,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
         for x in best_text.splitlines()
         if x.strip()
     ]
-
-
-#    print("\nFINAL OCR:")
-
- #   for line in lines:
-  #      print(line)
-
-
-
+    
     with open(
         DEBUG_OCR_FILE,
         "a",
@@ -325,8 +308,6 @@ for filename in os.listdir(RECEIPT_FOLDER):
 
         for line in lines:
             f.write(line+"\n")
-
-
 
     # ----------------------------
     # Store
@@ -345,10 +326,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
                 store=val
                 break
 
-
     print("Store:",store)
-
-
 
     # ----------------------------
     # Date
@@ -357,14 +335,10 @@ for filename in os.listdir(RECEIPT_FOLDER):
     receipt_date=""
 
     for line in lines:
-
         m=date_pattern.search(line)
-
         if m:
             receipt_date=m.group()
             break
-
-
     print("Date:",receipt_date)
 
     # ----------------------------
@@ -394,41 +368,23 @@ for filename in os.listdir(RECEIPT_FOLDER):
         full_address = address
     if city_state:
         full_address += ", " + city_state
-
     print(f"Address: {full_address}")
-
 
     # ----------------------------
     # Items only
     # ----------------------------
 
     reading_items=True
-
-
     found=False
 
-
     for line in lines:
-
-
         if "SUBTOTAL" in line.upper():
-
             reading_items=False
-
-
         if not reading_items:
             continue
-
-
-
         match=price_pattern.search(line)
-
-
         if not match:
             continue
-
-
-
         raw_name=match.group(1).strip()
 
         price=normalize_price(
@@ -439,34 +395,14 @@ for filename in os.listdir(RECEIPT_FOLDER):
         if ignored(raw_name):
             continue
 
-
-
         try:
-
             price=float(price)
-
         except:
-
-            continue
-
-
-
-        # Reject impossible prices
-
-        if price <=0 or price>500:
-
-            continue
-
-
-
+            continue            
         clean=clean_item_name(raw_name)
 
-
         if len(clean)<3:
-
             continue
-
-
 
         cur.execute("""
         INSERT OR IGNORE INTO items
@@ -486,20 +422,13 @@ for filename in os.listdir(RECEIPT_FOLDER):
         print(
             f"{clean} -> ${price:.2f}"
         )
-
-
         found=True
-
-
 
     if not found:
 
         print("No items extracted")
 
-
     conn.commit()
-
-
 
 conn.close()
 
