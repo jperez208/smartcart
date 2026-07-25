@@ -367,44 +367,36 @@ for filename in os.listdir(RECEIPT_FOLDER):
 
     print("Date:",receipt_date)
 
-    #----------------------------
-    # Store Address
-    #----------------------------
+    # ----------------------------
+    # Store Address Detection
+    # ----------------------------
 
     address = ""
-    full_address =  ""
-    city = ""
-    state = ""
-    zip_code = ""
-
-    address_pattern = re.compile(
-        r'^\d+\s+.*(?:ST|STREET|RD|ROAD|AVE|AVENUE|BLVD|BOULEVARD|DR|DRIVE|LN|LANE|CT|COURT|PKWY|PARKWAY|WAY|WY|PL|PLACE|CIR|CIRCLE|HWY|HIGHWAY)\b',
-        re.IGNORECASE
-    )
-    for line in lines[:15]:
-      if address_pattern.match(line):
-          address = line
-          break
     city_state = ""
+    full_address = ""
 
-    city_pattern = re.compile(
-      r"(.+?)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)",
-      re.IGNORECASE
-    )
+    address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
+    city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
 
-    for line in lines[:20]:
-      match = city_pattern.search(line)
+    for i, line in enumerate(lines[:20]):
+        if address_pattern.match(line):
+            if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
+                continue
+            address = line
 
-      if match:
-         city = match.group(1).strip()
-         state = match.group(2)
-         zip_code = match.group(3)
-         break
-      if city:
-          if full_address:
-              full_address +=","
-      full_address += f"{city}, {state} {zip_code}"
-    print(f"{full_address}")
+            if i + 1 < len(lines):
+                possible_city = lines[i + 1]
+                if city_pattern.match(possible_city):
+                    city_state = possible_city
+            break
+
+    if address:
+        full_address = address
+    if city_state:
+        full_address += ", " + city_state
+
+    print(f"Address: {full_address}")
+
 
     # ----------------------------
     # Items only
