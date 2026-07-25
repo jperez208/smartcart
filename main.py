@@ -133,7 +133,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
     # Extraction of the thresholded image array
     gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
-    # ----------------------------
+'''    # ----------------------------
     # OCR (Multi-PSM Fallback Loop)
     # ----------------------------
 
@@ -162,7 +162,84 @@ for filename in os.listdir(RECEIPT_FOLDER):
     if not lines:
         print("  No text found across any PSM settings.")
         continue
+'''
+# ----------------------------
+# OCR (Multi-PSM Combine)
+# ----------------------------
 
+all_lines = []
+ocr_results = {}
+
+for psm in ["6", "4", "11", "5"]:
+    config = f"--psm {psm}"
+
+    attempt = pytesseract.image_to_string(
+        gray,
+        config=config
+    )
+
+    attempt = attempt.replace("$ ", "$")
+    attempt = attempt.replace(" ,", ",")
+    attempt = attempt.replace(" .", ".")
+
+    lines = [
+        line.strip()
+        for line in attempt.splitlines()
+        if line.strip()
+    ]
+
+    ocr_results[psm] = lines
+
+    print(f"\nPSM {psm}: {len(lines)} lines")
+
+    for line in lines:
+        all_lines.append(line)
+
+
+# ----------------------------
+# Combine / Deduplicate
+# ----------------------------
+
+combined_lines = []
+
+for line in all_lines:
+
+    clean = clean_item_name(line)
+
+    if not clean:
+        continue
+
+    duplicate = False
+
+    for existing in combined_lines:
+        existing_clean = clean_item_name(existing)
+
+        # Similar OCR results
+        if get_close_matches(
+            clean,
+            [existing_clean],
+            cutoff=0.85
+        ):
+            duplicate = True
+            break
+
+    if not duplicate:
+        combined_lines.append(line)
+
+
+lines = combined_lines
+
+
+print("\n--- COMBINED OCR ---")
+
+for line in lines:
+    print(line)
+# Save debug
+with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+    f.write("\n--- COMBINED OCR ---\n")
+
+    for line in lines:
+        f.write(line + "\n")
     # ----------------------------
     # Store detection (best guess)
     # ----------------------------
