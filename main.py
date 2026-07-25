@@ -367,7 +367,44 @@ for filename in os.listdir(RECEIPT_FOLDER):
 
     print("Date:",receipt_date)
 
+    #----------------------------
+    # Store Address
+    #----------------------------
 
+    address = ""
+    full_address =  ""
+    city = ""
+    state = ""
+    zip_code = ""
+
+    address_pattern = re.compile(
+        r'^\d+\s+.*(?:ST|STREET|RD|ROAD|AVE|AVENUE|BLVD|BOULEVARD|DR|DRIVE|LN|LANE|CT|COURT|PKWY|PARKWAY|WAY|WY|PL|PLACE|CIR|CIRCLE|HWY|HIGHWAY)\b',
+        re.IGNORECASE
+    )
+    for line in lines[:15]:
+      if address_pattern.match(line):
+          address = line
+          break
+    city_state = ""
+
+    city_pattern = re.compile(
+      r"(.+?)[,\s]+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)",
+      re.IGNORECASE
+    )
+
+    for line in lines[:20]:
+      match = city_pattern.search(line)
+
+      if match:
+         city = match.group(1).strip()
+         state = match.group(2)
+         zip_code = match.group(3)
+         break
+      if city:
+          if full_address:
+              full_address +=","
+      full_address += f"{city}, {state} {zip_code}"
+    print(f"{full_address}")
 
     # ----------------------------
     # Items only
