@@ -3,7 +3,6 @@ import re
 import cv2
 import pytesseract
 import sqlite3
-from difflib import get_close_matches
 
 # ----------------------------
 # Configuration
@@ -14,269 +13,193 @@ DATABASE = "receipts.db"
 DEBUG_OCR_FILE = "debug_ocr.txt"
 
 # ----------------------------
-# Check receipt folder
+# Database Setup
 # ----------------------------
 
-if not os.path.exists(RECEIPT_FOLDER):
-    print(f"Error: '{RECEIPT_FOLDER}' folder not found.")
-    exit()
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
 
-# ----------------------------
-# Connect to database
-# ----------------------------
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store TEXT,
+        full_address TEXT,
+        date TEXT,
+        raw_name TEXT,
+        clean_name TEXT,
+        price REAL
+    )
+    """)
 
-conn = sqlite3.connect(DATABASE)
-cur = conn.cursor()
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_items
+    ON items (store, full_address, date, clean_name, price)
+    """)
 
-cur.execute("""
-CREATE TABLE IF NOT EXISTS items(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    store TEXT,
-    full_address TEXT,
-    date TEXT,
-    raw_name TEXT,
-    clean_name TEXT,
-    price REAL
-)
-""")
-
-cur.execute("""
-CREATE UNIQUE INDEX IF NOT EXISTS idx_items
-ON items(store, full_address, date, clean_name, price)
-""")
-
-# ----------------------------
-# Regular Expressions
-# ----------------------------
-
-price_pattern = re.compile(
-    r"(.+?)\s+\$?(\d{1,3}[.,]\d{2,3})(?:\s*[A-Z*]+)?$",
-    re.IGNORECASE
-)
-date_pattern = re.compile(
-    r'(?:\b\d{4}[-/\.]\d{1,2}[-/\.]\d{1,2}\b|'
-    r'\b\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}\b|'
-    r'\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4}\b|'
-    r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{2,4}\b)',
-    re.IGNORECASE
-)
-ignore_words = {
-    "subtotal", "sub total", "tax", "total", "change",
-    "cash", "visa", "mastercard", "debit", "credit",
-    "balance", "payment", "amount", "thank", "items",
-    "sale", "discount", "coupon"
-}
-
-# ---------------------------
-#  Store Names/Other info
-#----------------------------
-STORE_NAMES = {
-    "WALMART": "Walmart",
-    "WAL-MART": "Walmart",
-    "WAL MART": "Walmart",
-    "WM SUPERCENTER": "Walmart",
-    "COSTCO": "Costco",
-    "COSTCO WHOLESALE": "Costco",
-    "WINCO": "WinCo Foods",
-    "WINCO FOODS": "WinCo Foods",
-    "SAFEWAY": "Safeway",
-    "FRED MEYER": "Fred Meyer",
-    "TARGET": "Target",
-    "ALBERTSONS": "Albertsons",
-    "SMITHS": "Smith's",
-    "KROGER": "Kroger",
-    "TRADER JOES": "Trader Joe's",
-    "TRADER JOE'S": "Trader Joe's",
-    "WHOLE FOODS": "Whole Foods Market",
-}
-
-# ----------------------------
-# Helper Functions
-# ----------------------------
-
-def clean_item_name(name):
-    name = name.upper()
-    name = re.sub(r"[^A-Z0-9\s]", "", name)
-    name = re.sub(r"\s+", " ", name)
-    return name.strip()
-
-def is_ignored(text):
-    text = text.lower()
-    return any(word in text for word in ignore_words)
-
-# ----------------------------
-# Process receipts
-# ----------------------------
-
-for filename in os.listdir(RECEIPT_FOLDER):
-
-    if not filename.lower().endswith((".jpg", ".jpeg", ".png")):
-        continue
-
-    filepath = os.path.join(RECEIPT_FOLDER, filename)
-    print(f"\nProcessing {filename}...")
-
-    image = cv2.imread(filepath)
-
-    if image is None:
-        print("  Could not read image.")
-        continue
-
-    # ----------------------------
-    # Preprocessing (Properly Indented)
-    # ----------------------------
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    gray = cv2.fastNlMeansDenoising(gray)
-        
-    # Extraction of the thresholded image array
-    gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-
-    # ----------------------------
-    # OCR (Multi-PSM Fallback Loop)
-    # ----------------------------
-
-    text = ""
-    lines = []
-            
-    for psm in ["6", "4", "11", "5"]:
-        custom_config = f"--psm {psm}"
-        attempt_text = pytesseract.image_to_string(gray, config=custom_config)
-                
-        attempt_text = attempt_text.replace("$ ", "$")
-        attempt_text = attempt_text.replace(" ,", ",")
-        attempt_text = attempt_text.replace(" .", ".")
-                
-        attempt_lines = [line.strip() for line in attempt_text.split("\n") if line.strip()]
-                
-        if attempt_lines:
-            text = attempt_text
-            lines = attempt_lines
-            print(f"  Successfully extracted text using --psm {psm}")
-            break
-
-    with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-        f.write(f"\n--- {filename} ---\n{text}\n")
-
-    if not lines:
-        print("  No text found across any PSM settings.")
-        continue
-
-    # ----------------------------
-    # Store detection (best guess)
-    # ----------------------------
-    known_stores = list(STORE_NAMES.keys())
-    store = "Unknown"
-
-    for line in lines[:20]:
-        clean = clean_item_name(line)
-
-        for key, value in STORE_NAMES.items():
-            if key in clean:
-                store = value
-                break
-        if store != "Unknown":
-            break
-                
-        match = get_close_matches(clean, known_stores, n=1, cutoff=0.60)
-        if match:
-            store = STORE_NAMES[match[0]]
-            break
-                
-    print(f"Store: {store}")
-
-    # ----------------------------
-    # Store Address Detection
-    # ----------------------------
-
-    address = ""
-    city_state = ""
-    full_address = ""
-
-    address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
-    city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
-
-    for i, line in enumerate(lines[:20]):
-        if address_pattern.match(line):
-            if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
-                continue
-            address = line
-
-            if i + 1 < len(lines):
-                possible_city = lines[i + 1]
-                if city_pattern.match(possible_city):
-                    city_state = possible_city
-            break
-
-    if address:
-        full_address = address
-    if city_state:
-        full_address += ", " + city_state
-
-    print(f"Address: {full_address}")
-
-    # ----------------------------
-    # Date detection
-    # ----------------------------
-
-    receipt_date = ""
-    receipt_dates = []
-
-    for line in lines:
-        match = date_pattern.search(line)
-        if match:
-            receipt_dates.append(match.group())
-                
-    receipt_date = receipt_dates[0] if receipt_dates else ""
-    if receipt_date:
-        print(f"Date: {receipt_date}")
-    else:
-        print("No Date Found")
-
-    # ----------------------------
-    # Item extraction
-    # ----------------------------
-
-    for line in lines:
-        match = price_pattern.search(line)
-        if not match:
-            continue
-
-        item_raw = match.group(1).strip()
-        price_text = match.group(2)
-
-        if is_ignored(item_raw):
-            continue
-
-        price_text = price_text.replace(",", ".")
-
-        if len(price_text.split(".")) == 3:
-            price_text = price_text[:-1]
-
-        try:
-            price = float(price_text)
-            clean_name = clean_item_name(item_raw)
-                
-            if not clean_name:
-                continue
-
-            cur.execute("""
-                INSERT OR IGNORE INTO items
-                (store, full_address, date, raw_name, clean_name, price)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (store, full_address, receipt_date, item_raw, clean_name, price))
-
-            print(f"  {clean_name} -> ${price:.2f}")
-        except Exception as e:
-            print(f"  Error parsing row data: {e}")
-            continue
-
-    # Commit changes per receipt
     conn.commit()
+    conn.close()
 
 # ----------------------------
-# Close database (Moved outside the loop)
+# Image Preprocessing
 # ----------------------------
-conn.close()
-print("\nDone.")
+
+def preprocess(image_path):
+    img = cv2.imread(image_path)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Improve contrast
+    gray = cv2.convertScaleAbs(gray, alpha=1.5, beta=10)
+
+    # Reduce noise
+    gray = cv2.GaussianBlur(gray, (3, 3), 0)
+
+    # Threshold
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+
+    # Crop middle (avoid header/footer junk)
+    h, w = thresh.shape
+    cropped = thresh[int(h * 0.2):int(h * 0.8), :]
+
+    return cropped
+
+# ----------------------------
+# OCR Scoring
+# ----------------------------
+
+def score_lines(lines):
+    score = 0
+    price_pattern = re.compile(r"\$?\d+\.\d{2}")
+
+    for line in lines:
+        if price_pattern.search(line):
+            score += 3
+
+        if 5 < len(line) < 40:
+            score += 1
+
+        if re.search(r"[^\w\s\.\-\$]", line):
+            score -= 1
+
+    return score
+
+# ----------------------------
+# OCR with Multiple PSM
+# ----------------------------
+
+def run_ocr(image):
+    best_score = -1
+    best_lines = []
+    best_text = ""
+
+    for psm in [6, 4, 11, 5]:
+        config = f"--psm {psm}"
+        attempt = pytesseract.image_to_string(image, config=config)
+
+        lines = [l.strip() for l in attempt.splitlines() if l.strip()]
+        s = score_lines(lines)
+
+        if s > best_score:
+            best_score = s
+            best_lines = lines
+            best_text = attempt
+
+    # Debug save
+    with open(DEBUG_OCR_FILE, "w") as f:
+        f.write(best_text)
+
+    return best_lines
+
+# ----------------------------
+# Line Filtering
+# ----------------------------
+
+def filter_lines(lines):
+    filtered = []
+
+    for line in lines:
+        low = line.lower()
+
+        if any(x in low for x in [
+            "total", "tax", "change", "balance",
+            "cash", "visa", "debit", "credit"
+        ]):
+            continue
+
+        if re.search(r"\d+\.\d{2}", line):
+            filtered.append(line)
+
+    return filtered
+
+# ----------------------------
+# Extract Items
+# ----------------------------
+
+def extract_items(lines):
+    items = []
+
+    pattern = re.compile(r"(.+?)\s+\$?(\d+\.\d{2})")
+
+    for line in lines:
+        match = pattern.search(line)
+        if match:
+            raw_name = match.group(1).strip()
+            price = float(match.group(2))
+
+            clean_name = re.sub(r"[^a-zA-Z0-9\s]", "", raw_name).lower()
+
+            items.append((raw_name, clean_name, price))
+
+    return items
+
+# ----------------------------
+# Save to Database
+# ----------------------------
+
+def save_items(items):
+    conn = sqlite3.connect(DATABASE)
+    cur = conn.cursor()
+
+    for raw, clean, price in items:
+        try:
+            cur.execute("""
+            INSERT INTO items (store, full_address, date, raw_name, clean_name, price)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, ("unknown", "unknown", "unknown", raw, clean, price))
+        except sqlite3.IntegrityError:
+            pass  # skip duplicates
+
+    conn.commit()
+    conn.close()
+
+# ----------------------------
+# Main Processing Loop
+# ----------------------------
+
+def process_receipts():
+    for file in os.listdir(RECEIPT_FOLDER):
+        if not file.lower().endswith((".png", ".jpg", ".jpeg")):
+            continue
+
+        path = os.path.join(RECEIPT_FOLDER, file)
+        print(f"Processing: {file}")
+
+        image = preprocess(path)
+        lines = run_ocr(image)
+        lines = filter_lines(lines)
+        items = extract_items(lines)
+
+        print("Items found:")
+        for item in items:
+            print(item)
+
+        save_items(items)
+
+# ----------------------------
+# Run
+# ----------------------------
+
+if __name__ == "__main__":
+    init_db()
+    process_receipts()
