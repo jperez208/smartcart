@@ -3,8 +3,7 @@ import re
 import cv2
 import pytesseract
 import sqlite3
-from difflib import get_close_matches
-from collections import defaultdict
+
 
 # ----------------------------
 # Configuration
@@ -13,15 +12,6 @@ from collections import defaultdict
 RECEIPT_FOLDER = "receipts"
 DATABASE = "receipts.db"
 DEBUG_OCR_FILE = "debug_ocr.txt"
-
-
-# ----------------------------
-# Check receipt folder
-# ----------------------------
-
-if not os.path.exists(RECEIPT_FOLDER):
-    print(f"Error: '{RECEIPT_FOLDER}' folder not found.")
-    exit()
 
 
 # ----------------------------
@@ -54,50 +44,57 @@ ON items(store, full_address, date, clean_name, price)
 # ----------------------------
 
 price_pattern = re.compile(
-    r"(.+?)\s+\$?\s*(\d{1,4}[.,\s]?\d{2})",
+    r"(.+?)\s+\$?\s*(\d+[.,]\d{2})",
     re.IGNORECASE
 )
+
 
 date_pattern = re.compile(
-    r'(?:\b\d{4}[-/\.]\d{1,2}[-/\.]\d{1,2}\b|'
-    r'\b\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}\b|'
-    r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}\b)',
+    r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b',
     re.IGNORECASE
 )
-
-
-ignore_words = {
-    "subtotal",
-    "sub total",
-    "tax",
-    "total",
-    "change",
-    "cash",
-    "visa",
-    "mastercard",
-    "debit",
-    "credit",
-    "balance",
-    "payment",
-    "thank",
-    "discount"
-}
 
 
 # ----------------------------
-# Store Names
+# Ignore words
+# ----------------------------
+
+IGNORE_WORDS = [
+    "SUBTOTAL",
+    "SUB TOTAL",
+    "TOTAL",
+    "TAX",
+    "CHANGE",
+    "CASH",
+    "ACCOUNT",
+    "APPROVAL",
+    "REFERENCE",
+    "REF",
+    "TRANS",
+    "TRANSACTION",
+    "VALIDATION",
+    "TERMINAL",
+    "PAYMENT",
+    "SERVICE",
+    "VISA",
+    "MASTERCARD",
+    "DEBIT",
+    "CREDIT",
+    "THANK"
+]
+
+
+# ----------------------------
+# Stores
 # ----------------------------
 
 STORE_NAMES = {
     "WALMART": "Walmart",
     "WAL-MART": "Walmart",
-    "WAL MART": "Walmart",
     "COSTCO": "Costco",
     "WINCO": "WinCo Foods",
     "SAFEWAY": "Safeway",
-    "FRED MEYER": "Fred Meyer",
-    "TARGET": "Target",
-    "ALBERTSONS": "Albertsons",
+    "TARGET": "Target"
 }
 
 
@@ -106,32 +103,96 @@ STORE_NAMES = {
 # ----------------------------
 
 def clean_item_name(name):
+
     name = name.upper()
-    name = re.sub(r"[^A-Z0-9\s]", "", name)
-    name = re.sub(r"\s+", " ", name)
+
+    name = re.sub(
+        r"[^A-Z0-9\s]",
+        "",
+        name
+    )
+
+    name = re.sub(
+        r"\s+",
+        " ",
+        name
+    )
+
     return name.strip()
 
 
-def is_ignored(text):
-    text = text.lower()
 
-    for word in ignore_words:
-        if word in text:
+def ignored(line):
+
+    upper = line.upper()
+
+    for word in IGNORE_WORDS:
+
+        if word in upper:
             return True
 
     return False
 
 
-def normalize_price(price):
 
-    price = price.replace(",", ".")
-    price = price.replace(" ", "")
+def normalize_price(value):
 
-    # OCR may read 299 instead of 2.99
-    if "." not in price and len(price) >= 3:
-        price = price[:-2] + "." + price[-2:]
+    value = value.replace(",", ".")
+    value = value.replace(" ", "")
 
-    return price
+    return value
+
+
+
+def score_ocr(text):
+
+    score = 0
+
+    upper = text.upper()
+
+
+    good = [
+        "TOTAL",
+        "SUBTOTAL",
+        "TAX",
+        "$",
+        "WALMART"
+    ]
+
+
+    bad = [
+        "eeee",
+        "||||",
+        "~~~~"
+    ]
+
+
+    for x in good:
+
+        if x in upper:
+            score += 10
+
+
+    for x in bad:
+
+        if x in upper:
+            score -= 10
+
+
+    # Penalize massive garbage OCR
+
+    weird = len(
+        re.findall(
+            r"[^A-Za-z0-9\s$.,#:/()-]",
+            text
+        )
+    )
+
+    score -= weird
+
+
+    return score
+
 
 
 # ----------------------------
@@ -141,37 +202,38 @@ def normalize_price(price):
 for filename in os.listdir(RECEIPT_FOLDER):
 
     if not filename.lower().endswith(
-        (".jpg", ".jpeg", ".png")
+        (".png",".jpg",".jpeg")
     ):
         continue
 
 
     print("\n======================")
-    print(f"Processing {filename}")
+    print("Processing", filename)
     print("======================")
 
 
-    filepath = os.path.join(
+    path = os.path.join(
         RECEIPT_FOLDER,
         filename
     )
 
 
-    image = cv2.imread(filepath)
+    image = cv2.imread(path)
 
     if image is None:
-        print("Could not read image")
         continue
 
 
+
     # ----------------------------
-    # Image preprocessing
+    # Preprocess
     # ----------------------------
 
     gray = cv2.cvtColor(
         image,
         cv2.COLOR_BGR2GRAY
     )
+
 
     gray = cv2.resize(
         gray,
@@ -181,82 +243,73 @@ for filename in os.listdir(RECEIPT_FOLDER):
         interpolation=cv2.INTER_CUBIC
     )
 
+
     gray = cv2.fastNlMeansDenoising(gray)
 
 
-    # Try thresholding
     gray = cv2.threshold(
         gray,
         0,
         255,
-        cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        cv2.THRESH_BINARY +
+        cv2.THRESH_OTSU
     )[1]
 
 
+
     # ----------------------------
-    # Multi PSM OCR Voting
+    # OCR selection
     # ----------------------------
 
-    ocr_votes = defaultdict(list)
+    results = []
 
 
-    for psm in ["6", "4", "11", "5"]:
+    for psm in [6,4,11,5]:
 
-        print(f"Running PSM {psm}")
+        print("Running PSM",psm)
 
-        config = f"--psm {psm}"
 
         text = pytesseract.image_to_string(
             gray,
-            config=config
+            config=f"--psm {psm}"
         )
 
 
-        text = text.replace("$ ", "$")
-        text = text.replace(" ,", ",")
-        text = text.replace(" .", ".")
+        text = text.replace("$ ","$")
+        text = text.replace(" ,",",")
+        text = text.replace(" .",".")
 
 
-        lines = [
-            line.strip()
-            for line in text.splitlines()
-            if line.strip()
-        ]
-
-
-        for line in lines:
-
-            normalized = clean_item_name(line)
-
-            if len(normalized) < 3:
-                continue
-
-            ocr_votes[normalized].append(line)
-
-
-
-    # ----------------------------
-    # Select voted OCR lines
-    # ----------------------------
-
-    lines = []
-
-
-    for normalized, versions in ocr_votes.items():
-
-        # Must appear in at least 2 OCR passes
-        if len(versions) >= 1:
-
-            best = max(
-                versions,
-                key=len
+        results.append(
+            (
+                score_ocr(text),
+                text
             )
+        )
 
-            lines.append(best)
 
+
+    best_score,best_text = max(
+        results,
+        key=lambda x:x[0]
+    )
+
+
+    print(
+        "Selected OCR score:",
+        best_score
+    )
+
+
+    lines = [
+        x.strip()
+        for x in best_text.splitlines()
+        if x.strip()
+    ]
 
 
     print("\nFINAL OCR:")
+
     for line in lines:
         print(line)
 
@@ -268,74 +321,78 @@ for filename in os.listdir(RECEIPT_FOLDER):
         encoding="utf-8"
     ) as f:
 
-        f.write("\n\n--- ")
-        f.write(filename)
-        f.write(" ---\n")
+        f.write("\n\n---"+filename+"---\n")
 
         for line in lines:
-            f.write(line + "\n")
+            f.write(line+"\n")
 
 
 
     # ----------------------------
-    # Detect store
+    # Store
     # ----------------------------
 
-    store = "Unknown"
+    store="Unknown"
 
 
-    for line in lines[:20]:
+    for line in lines[:15]:
 
-        clean = clean_item_name(line)
+        c=clean_item_name(line)
 
+        for key,val in STORE_NAMES.items():
 
-        for key, value in STORE_NAMES.items():
-
-            if key in clean:
-                store = value
+            if key in c:
+                store=val
                 break
 
 
-        if store != "Unknown":
+    print("Store:",store)
+
+
+
+    # ----------------------------
+    # Date
+    # ----------------------------
+
+    receipt_date=""
+
+    for line in lines:
+
+        m=date_pattern.search(line)
+
+        if m:
+            receipt_date=m.group()
             break
 
 
-
-    print("Store:", store)
+    print("Date:",receipt_date)
 
 
 
     # ----------------------------
-    # Detect date
+    # Items only
     # ----------------------------
 
-    receipt_date = ""
+    reading_items=True
+
+
+    found=False
 
 
     for line in lines:
 
-        match = date_pattern.search(line)
 
-        if match:
-            receipt_date = match.group()
-            break
+        if "SUBTOTAL" in line.upper():
 
+            reading_items=False
 
 
-    print("Date:", receipt_date)
+        if not reading_items:
+            continue
 
 
 
-    # ----------------------------
-    # Extract items
-    # ----------------------------
-
-    found = False
-
-
-    for line in lines:
-
-        match = price_pattern.search(line)
+        match=price_pattern.search(line)
 
 
         if not match:
@@ -343,25 +400,21 @@ for filename in os.listdir(RECEIPT_FOLDER):
 
 
 
-        item_raw = match.group(1).strip()
+        raw_name=match.group(1).strip()
 
-        price_text = match.group(2)
+        price=normalize_price(
+            match.group(2)
+        )
 
 
-        if is_ignored(item_raw):
+        if ignored(raw_name):
             continue
 
 
 
-        price_text = normalize_price(
-            price_text
-        )
-
-
         try:
 
-            price = float(price_text)
-
+            price=float(price)
 
         except:
 
@@ -369,42 +422,50 @@ for filename in os.listdir(RECEIPT_FOLDER):
 
 
 
-        clean_name = clean_item_name(
-            item_raw
-        )
+        # Reject impossible prices
+
+        if price <=0 or price>500:
+
+            continue
 
 
-        if not clean_name:
+
+        clean=clean_item_name(raw_name)
+
+
+        if len(clean)<3:
+
             continue
 
 
 
         cur.execute("""
         INSERT OR IGNORE INTO items
-        (store, full_address, date, raw_name, clean_name, price)
-        VALUES (?, ?, ?, ?, ?, ?)
+        (store,full_address,date,raw_name,clean_name,price)
+        VALUES (?,?,?,?,?,?)
         """,
         (
             store,
             "",
             receipt_date,
-            item_raw,
-            clean_name,
+            raw_name,
+            clean,
             price
         ))
 
 
         print(
-            f"{clean_name} -> ${price:.2f}"
+            f"{clean} -> ${price:.2f}"
         )
 
-        found = True
+
+        found=True
 
 
 
     if not found:
-        print("No items extracted from this receipt")
 
+        print("No items extracted")
 
 
     conn.commit()
