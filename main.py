@@ -245,7 +245,7 @@ for filename in os.listdir(RECEIPT_FOLDER):
     for normalized, versions in ocr_votes.items():
 
         # Must appear in at least 2 OCR passes
-        if len(versions) >= 2:
+        if len(versions) >= 1:
 
             best = max(
                 versions,
