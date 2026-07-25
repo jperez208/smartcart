@@ -163,79 +163,79 @@ for filename in os.listdir(RECEIPT_FOLDER):
         print("  No text found across any PSM settings.")
         continue
 '''
-# ----------------------------
-# OCR (Multi-PSM Voting)
-# ----------------------------
+    # ----------------------------
+    # OCR (Multi-PSM Voting)
+    # PER RECEIPT
+    # ----------------------------
 
-from collections import defaultdict
+    ocr_votes = {}
 
-ocr_lines = defaultdict(list)
+    for psm in ["6", "4", "11", "5"]:
 
-for psm in ["6", "4", "11", "5"]:
+        custom_config = f"--psm {psm}"
 
-    config = f"--psm {psm}"
+        attempt_text = pytesseract.image_to_string(
+            gray,
+            config=custom_config
+        )
 
-    attempt = pytesseract.image_to_string(
-        gray,
-        config=config
-    )
+        attempt_text = attempt_text.replace("$ ", "$")
+        attempt_text = attempt_text.replace(" ,", ",")
+        attempt_text = attempt_text.replace(" .", ".")
 
-    attempt = attempt.replace("$ ", "$")
-    attempt = attempt.replace(" ,", ",")
-    attempt = attempt.replace(" .", ".")
+        attempt_lines = [
+            line.strip()
+            for line in attempt_text.splitlines()
+            if line.strip()
+        ]
 
-    lines = [
-        line.strip()
-        for line in attempt.splitlines()
-        if line.strip()
-    ]
+        print(f"  PSM {psm}: {len(attempt_lines)} lines")
 
-    print(f"PSM {psm}: {len(lines)} lines")
+        for line in attempt_lines:
+
+            normalized = clean_item_name(line)
+
+            if len(normalized) < 3:
+                continue
+
+            if normalized not in ocr_votes:
+                ocr_votes[normalized] = []
+
+            ocr_votes[normalized].append(line)
+
+
+    # ----------------------------
+    # Select voted lines
+    # ----------------------------
+
+    lines = []
+
+    for normalized, versions in ocr_votes.items():
+
+        # Require at least 2 OCR engines to agree
+        if len(versions) >= 2:
+
+            # Keep the longest version
+            best_version = max(
+                versions,
+                key=len
+            )
+
+            lines.append(best_version)
+
+
+    print("\n--- FINAL OCR FOR THIS RECEIPT ---")
 
     for line in lines:
-
-        # Normalize for comparison
-        normalized = clean_item_name(line)
-
-        if len(normalized) < 3:
-            continue
-
-        ocr_lines[normalized].append(line)
+        print(line)
 
 
-# ----------------------------
-# Keep only repeated results
-# ----------------------------
+    with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+        f.write(f"\n--- {filename} FINAL OCR ---\n")
 
-lines = []
-
-for normalized, versions in ocr_lines.items():
-
-    occurrences = len(versions)
-
-    # Require agreement
-    if occurrences < 2:
-        continue
-
-    # Pick longest version (usually least truncated)
-    best = max(
-        versions,
-        key=len
-    )
-
-    lines.append(best)
-
-
-print("\n--- VOTED OCR RESULTS ---")
-
-for line in lines:
-    print(line)
-
-
-with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-    f.write("\n--- VOTED OCR RESULTS ---\n")
-    for line in lines:
-        f.write(line + "\n")
+        for line in lines:
+            f.write(line + "\n")
+        
     # ----------------------------
     # Store detection (best guess)
     # ----------------------------
