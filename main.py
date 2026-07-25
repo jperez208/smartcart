@@ -164,13 +164,15 @@ for filename in os.listdir(RECEIPT_FOLDER):
         continue
 '''
 # ----------------------------
-# OCR (Multi-PSM Combine)
+# OCR (Multi-PSM Voting)
 # ----------------------------
 
-all_lines = []
-ocr_results = {}
+from collections import defaultdict
+
+ocr_lines = defaultdict(list)
 
 for psm in ["6", "4", "11", "5"]:
+
     config = f"--psm {psm}"
 
     attempt = pytesseract.image_to_string(
@@ -188,56 +190,50 @@ for psm in ["6", "4", "11", "5"]:
         if line.strip()
     ]
 
-    ocr_results[psm] = lines
-
-    print(f"\nPSM {psm}: {len(lines)} lines")
+    print(f"PSM {psm}: {len(lines)} lines")
 
     for line in lines:
-        all_lines.append(line)
+
+        # Normalize for comparison
+        normalized = clean_item_name(line)
+
+        if len(normalized) < 3:
+            continue
+
+        ocr_lines[normalized].append(line)
 
 
 # ----------------------------
-# Combine / Deduplicate
+# Keep only repeated results
 # ----------------------------
 
-combined_lines = []
+lines = []
 
-for line in all_lines:
+for normalized, versions in ocr_lines.items():
 
-    clean = clean_item_name(line)
+    occurrences = len(versions)
 
-    if not clean:
+    # Require agreement
+    if occurrences < 2:
         continue
 
-    duplicate = False
+    # Pick longest version (usually least truncated)
+    best = max(
+        versions,
+        key=len
+    )
 
-    for existing in combined_lines:
-        existing_clean = clean_item_name(existing)
-
-        # Similar OCR results
-        if get_close_matches(
-            clean,
-            [existing_clean],
-            cutoff=0.85
-        ):
-            duplicate = True
-            break
-
-    if not duplicate:
-        combined_lines.append(line)
+    lines.append(best)
 
 
-lines = combined_lines
-
-
-print("\n--- COMBINED OCR ---")
+print("\n--- VOTED OCR RESULTS ---")
 
 for line in lines:
     print(line)
-# Save debug
-with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-    f.write("\n--- COMBINED OCR ---\n")
 
+
+with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+    f.write("\n--- VOTED OCR RESULTS ---\n")
     for line in lines:
         f.write(line + "\n")
     # ----------------------------
