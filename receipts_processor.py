@@ -84,16 +84,19 @@ def process_receipts():
         text = pytesseract.image_to_string(gray, config=custom_config)
         # OCR multi-psm
         results = []
-        psm = ""
-        for psm in [4,6,11]:
-            text = pytesseract.image_to_string(gray, config=f"--psm {psm}")
+        for psm in:
+            # Restrict characters inside the loop to prevent wrinkle/noise artifacts
+            custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$,-/#% "
+            text = pytesseract.image_to_string(gray, config=custom_config)
             results.append((score_ocr(text), text))
             print(f"\rPSM mode: {psm}", end="", flush=True)
+            
         _, best_text = max(results, key=lambda x: x[0])
 
-        # Write to your debug file to inspect the raw OCR output
+        # FIXED INDENTATION: Exactly 8 spaces out here
         with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as df:
             df.write(f"\n--- FILE: {filename} ---\n{best_text}\n")
+            
         lines = [x.strip() for x in best_text.splitlines() if x.strip()]
 
         # detect store
