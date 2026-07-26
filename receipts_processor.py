@@ -44,7 +44,7 @@ def process_receipts():
         for psm in [1,3,4,5,6,7,8,9,10,11,12,13]:
             text = pytesseract.image_to_string(gray, config=f"--psm {psm}")
             results.append((score_ocr(text), text))
-            print(f"PSM mode: {psm}")
+            print(f"\rPSM mode: {psm}", end="", flush=True)
         _, best_text = max(results, key=lambda x: x[0])
 
         lines = [x.strip() for x in best_text.splitlines() if x.strip()]
