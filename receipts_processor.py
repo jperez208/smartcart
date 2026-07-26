@@ -163,4 +163,4 @@ def process_receipts():
         conn.commit()
 
     conn.close()
-print("\nFinished.")
+print("\nFinished, receipt info updated.")
