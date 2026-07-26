@@ -91,8 +91,8 @@ def process_receipts():
         _, best_text = max(results, key=lambda x: x[0])
 
         # Write to your debug file to inspect the raw OCR output
-        with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as df:
-            df.write(f"\n--- FILE: {filename} ---\n{best_text}\n")
+            with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as df:
+                df.write(f"\n--- FILE: {filename} ---\n{best_text}\n")
         lines = [x.strip() for x in best_text.splitlines() if x.strip()]
 
         # detect store
