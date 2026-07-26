@@ -57,7 +57,7 @@ def process_receipts():
                 if key in c:
                     store = val
                     break
-          print(f"Store: {store}")
+        print(f"Store: {store}")
         # detect date
         receipt_date = ""
         for line in lines:
@@ -65,7 +65,7 @@ def process_receipts():
             if m:
                 receipt_date = m.group()
                 break
-         print(f"Date: {receipt_date}")
+        print(f"Date: {receipt_date}")
 
         # items
         for line in lines:
