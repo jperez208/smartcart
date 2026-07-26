@@ -14,7 +14,7 @@ RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
 DEBUG_OCR_FILE = "debug_ocr.txt"
 
 price_pattern = re.compile(r"(.+?)\s+\$?\s*(\d+[.,]\d{2})", re.IGNORECASE)
-date_pattern = re.compile(r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b', re.IGNORECASE)
+date_pattern = re.compile(r'\b\d{1,2}[\s\-/.]+\d{1,2}[\s\-/.]+\d{2,4}\b', re.IGNORECASE)
 
 def get_file_hash(filepath):
     with open(filepath, "rb") as f:
@@ -84,7 +84,7 @@ def process_receipts():
         results = []
         for psm in [4, 6, 11]:
             # The whitelist configuration belongs INSIDE the loop so it can use the current psm variable
-            custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$,-/#% "
+            custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$.,-/:#\ "
             text = pytesseract.image_to_string(gray, config=custom_config)
             results.append((score_ocr(text), text))
             print(f"\rPSM mode: {psm}", end="", flush=True)
