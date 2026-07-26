@@ -67,19 +67,34 @@ def process_receipts():
             continue
 
         # preprocess
+    #Old image processor
+       ''' gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        gray = cv2.fastNlMeansDenoising(gray)
+        gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]'''
+        # preprocess
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
         gray = cv2.fastNlMeansDenoising(gray)
-        gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-
+        
+        # FIXED: Replaced Otsu with Adaptive Thresholding to prevent blacked-out text
+        gray = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+        )
+        # Restrict characters to prevent wrinkle/noise artifacts
+        custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$,-/#% "
+        text = pytesseract.image_to_string(gray, config=custom_config)
         # OCR multi-psm
         results = []
-        for psm in [1,3,4,5,6,7,8,9,10,11,12,13]:
+        for psm in [4,6,11]:
             text = pytesseract.image_to_string(gray, config=f"--psm {psm}")
             results.append((score_ocr(text), text))
             print(f"\rPSM mode: {psm}", end="", flush=True)
         _, best_text = max(results, key=lambda x: x[0])
 
+        # Write to your debug file to inspect the raw OCR output
+        with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as df:
+            df.write(f"\n--- FILE: {filename} ---\n{best_text}\n")
         lines = [x.strip() for x in best_text.splitlines() if x.strip()]
 
         # detect store
