@@ -25,6 +25,14 @@ def init_db():
     CREATE UNIQUE INDEX IF NOT EXISTS idx_items
     ON items(store, full_address, date, clean_name, price)
     """)
-
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS processed_files(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT UNIQUE,
+            file_hash TEXT UNIQUE,
+            processed_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+    
     conn.commit()
     conn.close()
