@@ -66,7 +66,35 @@ def process_receipts():
                 receipt_date = m.group()
                 break
         print(f"Date: {receipt_date}")
+        # ----------------------------
+        # Store Address Detection
+        # ----------------------------
 
+        address = ""
+        city_state = ""
+        full_address = ""
+
+        address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
+        city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
+
+        for i, line in enumerate(lines[:20]):
+            if address_pattern.match(line):
+                if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
+                    continue
+                address = line
+
+                if i + 1 < len(lines):
+                    possible_city = lines[i + 1]
+                    if city_pattern.match(possible_city):
+                        city_state = possible_city
+                break
+
+        if address:
+            full_address = address
+        if city_state:
+            full_address += ", " + city_state
+        print(f"Address: {full_address}")
+    
         # items
         for line in lines:
             match = price_pattern.search(line)
