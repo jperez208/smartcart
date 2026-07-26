@@ -160,7 +160,7 @@ def process_receipts():
 
     mark_processed(cur, filename, path)
 
-conn.commit()
+    conn.commit()
 
-conn.close()
+    conn.close()
 print("\nFinished.")
