@@ -93,7 +93,7 @@ def process_receipts():
         # Write to your debug file to inspect the raw OCR output
             with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as df:
                 df.write(f"\n--- FILE: {filename} ---\n{best_text}\n")
-        lines = [x.strip() for x in best_text.splitlines() if x.strip()]
+            lines = [x.strip() for x in best_text.splitlines() if x.strip()]
 
         # detect store
         store = "Unknown"
