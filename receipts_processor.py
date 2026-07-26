@@ -82,7 +82,7 @@ def process_receipts():
         
         # OCR multi-psm
         results = []
-        for psm in:
+        for psm in [4, 6, 11]:
             # The whitelist configuration belongs INSIDE the loop so it can use the current psm variable
             custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$,-/#% "
             text = pytesseract.image_to_string(gray, config=custom_config)
