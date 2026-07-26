@@ -50,7 +50,7 @@ def process_receipts():
         if not filename.lower().endswith((".png",".jpg",".jpeg")):
             continue
 
-        path = os.path.join(RECEIPT_FOLDER, filename)
+      #  path = os.path.join(RECEIPT_FOLDER, filename)
 
         if already_processed(cur, path):
             print(f"Skipping {filename} (already processed)")
@@ -60,7 +60,7 @@ def process_receipts():
         print("Processing", filename)
         print("======================")
 
-       # path = os.path.join(RECEIPT_FOLDER, filename)
+        path = os.path.join(RECEIPT_FOLDER, filename)
         image = cv2.imread(path)
 
         if image is None:
