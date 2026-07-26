@@ -14,6 +14,7 @@ STORE_NAMES = {
     "WINCO": "WinCo Foods",
     "SAFEWAY": "Safeway",
     "TARGET": "Target"
+    "DOLLAR TREE": "Dollar Tree"
 }
 
 def clean_item_name(name):
