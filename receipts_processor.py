@@ -8,8 +8,8 @@ from db import get_connection
 RECEIPT_FOLDER = "receipts"
 #BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-#RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
-#DEBUG_OCR_FILE = "debug_ocr.txt"
+RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
+DEBUG_OCR_FILE = "debug_ocr.txt"
 
 price_pattern = re.compile(r"(.+?)\s+\$?\s*(\d+[.,]\d{2})", re.IGNORECASE)
 date_pattern = re.compile(r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b', re.IGNORECASE)
@@ -93,7 +93,7 @@ def process_receipts():
             INSERT OR IGNORE INTO items
             (store, full_address, date, raw_name, clean_name, price)
             VALUES (?,?,?,?,?,?)
-            """, (store, "", receipt_date, raw_name, clean, price))
+            """, (store, full_address, receipt_date, raw_name, clean, price))
 
             print(f"{clean} -> ${price:.2f}")
 
