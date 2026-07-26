@@ -78,9 +78,7 @@ def process_receipts():
         gray = cv2.fastNlMeansDenoising(gray)
         
         # FIXED: Replaced Otsu with Adaptive Thresholding to prevent blacked-out text
-        gray = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-        )
+        gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         # Restrict characters to prevent wrinkle/noise artifacts
         custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$,-/#% "
         text = pytesseract.image_to_string(gray, config=custom_config)
