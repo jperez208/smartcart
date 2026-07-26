@@ -1,5 +1,5 @@
 from db import init_db
-from receipt_processor import process_receipts
+from receipts_processor import process_receipts
 
 def main():
     init_db()
