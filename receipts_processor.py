@@ -57,7 +57,7 @@ def process_receipts():
                 if key in c:
                     store = val
                     break
-        print(f"Store: {store}")
+        print(f"\nStore: {store}")
         # detect date
         receipt_date = ""
         for line in lines:
