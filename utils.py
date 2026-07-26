@@ -13,7 +13,7 @@ STORE_NAMES = {
     "COSTCO": "Costco",
     "WINCO": "WinCo Foods",
     "SAFEWAY": "Safeway",
-    "TARGET": "Target"
+    "TARGET": "Target",
     "DOLLAR TREE": "Dollar Tree"
 }
 
