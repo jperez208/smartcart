@@ -2,8 +2,10 @@ import os
 import cv2
 import pytesseract
 import re
+import hashlib
 from utils import *
 from db import get_connection
+
 
 RECEIPT_FOLDER = "receipts"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,6 +16,31 @@ DEBUG_OCR_FILE = "debug_ocr.txt"
 price_pattern = re.compile(r"(.+?)\s+\$?\s*(\d+[.,]\d{2})", re.IGNORECASE)
 date_pattern = re.compile(r'\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b', re.IGNORECASE)
 
+def get_file_hash(filepath):
+    with open(filepath, "rb") as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+
+def already_processed(cur, filepath):
+    file_hash = get_file_hash(filepath)
+
+    cur.execute("""
+    SELECT id FROM processed_files
+    WHERE file_hash = ?
+    """, (file_hash,))
+
+    return cur.fetchone() is not None
+
+
+def mark_processed(cur, filename, filepath):
+    file_hash = get_file_hash(filepath)
+
+    cur.execute("""
+    INSERT OR IGNORE INTO processed_files
+    (filename, file_hash)
+    VALUES (?,?)
+    """, (filename, file_hash))
+
 def process_receipts():
     conn = get_connection()
     cur = conn.cursor()
@@ -21,6 +48,12 @@ def process_receipts():
     for filename in os.listdir(RECEIPT_FOLDER):
 
         if not filename.lower().endswith((".png",".jpg",".jpeg")):
+            continue
+
+        path = os.path.join(RECEIPT_FOLDER, filename)
+
+        if already_processed(cur, path):
+            print(f"Skipping {filename} (already processed)")
             continue
 
         print("\n======================")
@@ -125,7 +158,9 @@ def process_receipts():
 
             print(f"{clean} -> ${price:.2f}")
 
-        conn.commit()
+mark_processed(cur, filename, path)
 
-    conn.close()
+conn.commit()
+
+conn.close()
     print("\nFinished.")
