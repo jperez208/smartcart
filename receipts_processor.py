@@ -84,6 +84,7 @@ def process_receipts():
         text = pytesseract.image_to_string(gray, config=custom_config)
         # OCR multi-psm
         results = []
+        psm = ""
         for psm in [4,6,11]:
             text = pytesseract.image_to_string(gray, config=f"--psm {psm}")
             results.append((score_ocr(text), text))
