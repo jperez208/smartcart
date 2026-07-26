@@ -5,7 +5,10 @@ import re
 from utils import *
 from db import get_connection
 
-RECEIPT_FOLDER = "receipts"
+#RECEIPT_FOLDER = "receipts"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
 DEBUG_OCR_FILE = "debug_ocr.txt"
 
 price_pattern = re.compile(r"(.+?)\s+\$?\s*(\d+[.,]\d{2})", re.IGNORECASE)
