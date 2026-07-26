@@ -85,7 +85,7 @@ def process_receipts():
         # OCR multi-psm
         results = []
         for psm in:
-            # Restrict characters inside the loop to prevent wrinkle/noise artifacts
+            # The whitelist configuration belongs INSIDE the loop so it can use the current psm variable
             custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$,-/#% "
             text = pytesseract.image_to_string(gray, config=custom_config)
             results.append((score_ocr(text), text))
@@ -93,7 +93,7 @@ def process_receipts():
             
         _, best_text = max(results, key=lambda x: x[0])
 
-        # FIXED INDENTATION: Exactly 8 spaces out here
+        # Write to your debug file to inspect the raw OCR output
         with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as df:
             df.write(f"\n--- FILE: {filename} ---\n{best_text}\n")
             
