@@ -151,7 +151,7 @@ def score_ocr(text):
         "SUBTOTAL",
         "TAX",
         "$",
-        "WALMART"
+        STORE_NAMES.items()
     ]
     bad = [
         "eeee",
