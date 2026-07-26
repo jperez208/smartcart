@@ -158,9 +158,9 @@ def process_receipts():
 
             print(f"{clean} -> ${price:.2f}")
 
-    mark_processed(cur, filename, path)
+        mark_processed(cur, filename, path)
 
-    conn.commit()
+        conn.commit()
 
     conn.close()
 print("\nFinished.")
