@@ -132,9 +132,9 @@ def process_receipts():
             key=lambda x: x[0]
         )
 
-        print(f"\nSelected preprocessing: {best_method}")
-        print(f"Selected PSM: {best_psm}")
-        print(f"Selected OCR score: {best_score}")
+        print(f"\n\033[92mSelected preprocessing:\033[0m \033[1;92m {best_method}\033[0m")
+        print(f"\033[92mSelected PSM:\033[0m \033[1;92m {best_psm}\033[0m")
+        print(f"\033[92mSelected OCR score:\033[0m \033[1;92m {best_score}\033[0m")
 
         if len(best_text.strip()) < 10:
             print("Poor OCR result, skipping.")
