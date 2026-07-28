@@ -12,7 +12,7 @@ RECEIPT_FOLDER = "receipts"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
-DEBUG_OCR_FILE = "debug_ocr.txt"
+DEBUG_OCR_FILE = os.path.join(BASE_DIR, "debug_ocr.txt")
 
 price_pattern = re.compile(r"(.+?)\s+\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))", re.IGNORECASE)
 date_pattern = re.compile(r'\b\d{1,2}[\s\-/.]+\d{1,2}[\s\-/.]+\d{2,4}\b', re.IGNORECASE)
