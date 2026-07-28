@@ -46,15 +46,17 @@ def mark_processed(cur, filename, filepath):
     """, (filename, file_hash))
 
 def process_receipts():
+    try:
+        pytesseract.get_tesseract_version()
+    except Exception:
+        print("Tesseract OCR is not installed or configured.")
+        return
+        
     conn = get_connection()
     cur = conn.cursor()
 
     for filename in sorted(os.listdir(RECEIPT_FOLDER)):
-        try:
-            pytesseract.get_tesseract_version()
-        except Exception:
-            print("Tesseract OCR is not installed or configured.")
-            return
+        
         if not filename.lower().endswith((".png",".jpg",".jpeg")):
             continue
 
@@ -143,9 +145,6 @@ def process_receipts():
             for line in best_text.splitlines()
             if line.strip()
         ]
-        if len(best_text.strip()) < 10:
-            print("Poor OCR result, skipping.")
-            continue
 
         with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
             f.write(f"\n\n--- {filename} ---\n")
