@@ -87,7 +87,7 @@ def process_receipts():
         results = []
 
         #original 6,4,11,5
-        for psm in [1,3,4,5,6,7,8,9,10,11,12,13]:
+        for psm in [4,6,11]:
 
             print("Running PSM",psm)
             print(f"\rPSM mode: {psm}", end="", flush=True)
