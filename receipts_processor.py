@@ -80,23 +80,67 @@ def process_receipts():
         # FIXED: Replaced Otsu with Adaptive Thresholding to prevent blacked-out text
         gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         
-        # OCR multi-psm
-        results = []
-        for psm in [4, 6, 11]:
-            # The whitelist configuration belongs INSIDE the loop so it can use the current psm variable
-            custom_config = f"--psm {psm} -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$.,-/:#\ "
-            text = pytesseract.image_to_string(gray, config=custom_config)
-            results.append((score_ocr(text), text))
-            print(f"\rPSM mode: {psm}", end="", flush=True)
-            
-        _, best_text = max(results, key=lambda x: x)
+        # ----------------------------
+        # OCR selection
+        # ----------------------------
 
-        # Write to your debug file to inspect the raw OCR output
-        with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as df:
-            df.write(f"\n--- FILE: {filename} ---\n{best_text}\n")
+        results = []
+
+        #original 6,4,11,5
+        for psm in [1,3,4,5,6,7,8,9,10,11,12,13]:
+
+            print("Running PSM",psm)
+            print(f"\rPSM mode: {psm}", end="", flush=True)
+
+            text = pytesseract.image_to_string(
+                gray,
+                config=f"--psm {psm}"
+            )
+
+
+            text = text.replace("$ ","$")
+            text = text.replace(" ,",",")
+            text = text.replace(" .",".")
+
+
+            results.append(
+                (
+                    score_ocr(text),
+                    text
+                )
+            )
+
+
+
+        best_score,best_text = max(
+            results,
+            key=lambda x:x[0]
+        )
+
+
+        print(
+            "Selected OCR score:",
+            best_score
+        )
+
+
+        lines = [
+            x.strip()
+            for x in best_text.splitlines()
+            if x.strip()
+        ]
+    
+        with open(
+            DEBUG_OCR_FILE,
+            "a",
+            encoding="utf-8"
+        ) as f:
+
+            f.write("\n\n---"+filename+"---\n")
+
+            for line in lines:
+                f.write(line+"\n")
             
-        lines = [x.strip() for x in best_text.splitlines() if x.strip()]
-        
         # detect store
         store = "Unknown"
         for line in lines[:15]:
