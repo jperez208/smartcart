@@ -77,7 +77,7 @@ def process_receipts():
             continue
 
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+        gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
         gray = cv2.fastNlMeansDenoising(gray)
 
 # Otsu threshold
@@ -106,7 +106,7 @@ def process_receipts():
         for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
             for psm in [4, 6, 11]:
 
-                print(f"Running {img_name} - PSM {psm}\n")
+                print(f"\rPSM mode: {psm}", end="", flush=True))
 
                 text = pytesseract.image_to_string(
                     img,
@@ -235,5 +235,7 @@ def process_receipts():
 
     conn.close()
 print("\nFinished, receipt info updated.")
+print("\nProcessing newly uploaded receipts.")
+print("\nPlease wait...")
 if __name__ == "__main__":
     process_receipts()
