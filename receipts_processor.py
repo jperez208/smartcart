@@ -95,14 +95,6 @@ def process_receipts():
             31,
             2
         )
-
-# Use the version with more extracted text
-        if len(text_adaptive.strip()) > len(text_otsu.strip()):
-            processed_img = adaptive
-            extracted_text = text_adaptive
-        else:
-            processed_img = otsu
-            extracted_text = text_otsu
        # ----------------------------
 # OCR selection
 # ----------------------------
