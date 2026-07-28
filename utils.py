@@ -9,12 +9,18 @@ IGNORE_WORDS = [
 
 STORE_NAMES = {
     "WALMART": "Walmart",
-    "WAL-MART": "Walmart",
+    "WAL MART": "Walmart",
+    "WALMART STORE": "Walmart",
+
+    "WALMART": "Walmart",
     "COSTCO": "Costco",
     "WINCO": "WinCo Foods",
     "SAFEWAY": "Safeway",
     "TARGET": "Target",
-    "DOLLAR TREE": "Dollar Tree"
+
+    "DOLLAR TREE": "Dollar Tree",
+    "DOLLARTREE": "Dollar Tree",
+    "DOLLAR  TREE": "Dollar Tree"
 }
 
 def clean_item_name(name):
