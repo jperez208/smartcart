@@ -1,4 +1,4 @@
-    import os
+import os
 import cv2
 import pytesseract
 import re
@@ -112,7 +112,7 @@ def process_receipts():
         for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
             for psm in [4, 6, 11]:
 
-                print(f"Running {img_name} - PSM {psm}")
+                print(f"Running {img_name} - PSM {psm}\n")
 
                 text = pytesseract.image_to_string(
                     img,
