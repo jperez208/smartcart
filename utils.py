@@ -44,7 +44,13 @@ def score_ocr(text):
     for x in bad:
         if x in upper:
             score -= 10
+            
+    price_hits = len(
+        re.findall(r"\d+\.\d{2}", text)
+        )
 
+    score += price_hits * 2
+    
     weird = len(re.findall(r"[^A-Za-z0-9\s$.,#:/()-]", text))
     score -= weird
 
