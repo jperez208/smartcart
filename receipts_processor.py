@@ -1,10 +1,11 @@
-import os
+    import os
 import cv2
 import pytesseract
 import re
 import hashlib
 from utils import *
 from db import get_connection
+from concurrent.futures import ThreadPoolExecutor
 
 
 RECEIPT_FOLDER = "receipts"
@@ -13,12 +14,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
 DEBUG_OCR_FILE = "debug_ocr.txt"
 
-price_pattern = re.compile(r"(.+?)\s+\$?\s*(\d+[.,]\d{2})", re.IGNORECASE)
+price_pattern = re.compile(r"(.+?)\s+\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))", re.IGNORECASE)
 date_pattern = re.compile(r'\b\d{1,2}[\s\-/.]+\d{1,2}[\s\-/.]+\d{2,4}\b', re.IGNORECASE)
 
 def get_file_hash(filepath):
+    hasher = hashlib.sha256()
     with open(filepath, "rb") as f:
-        return hashlib.md5(f.read()).hexdigest()
+        while chunk := f.read(8192):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 
 def already_processed(cur, filepath):
@@ -45,8 +49,12 @@ def process_receipts():
     conn = get_connection()
     cur = conn.cursor()
 
-    for filename in os.listdir(RECEIPT_FOLDER):
-
+    for filename in sorted(os.listdir(RECEIPT_FOLDER)):
+        try:
+            pytesseract.get_tesseract_version()
+        except Exception:
+            print("Tesseract OCR is not installed or configured.")
+            return
         if not filename.lower().endswith((".png",".jpg",".jpeg")):
             continue
 
@@ -66,80 +74,93 @@ def process_receipts():
         if image is None:
             continue
 
-        # preprocess
-    #Old image processor
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
         gray = cv2.fastNlMeansDenoising(gray)
-        gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-       # preprocess
-       # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-       # gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-       #gray = cv2.fastNlMeansDenoising(gray)
-        
-        # FIXED: Replaced Otsu with Adaptive Thresholding to prevent blacked-out text
-       # gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        
-        # ----------------------------
-        # OCR selection
-        # ----------------------------
+
+# Otsu threshold
+        otsu = cv2.threshold(
+            gray,
+            0,
+            255,
+            cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )[1]
+
+# Adaptive threshold
+        adaptive = cv2.adaptiveThreshold(
+            gray,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31,
+            2
+        )
+
+# Use the version with more extracted text
+        if len(text_adaptive.strip()) > len(text_otsu.strip()):
+            processed_img = adaptive
+            extracted_text = text_adaptive
+        else:
+            processed_img = otsu
+            extracted_text = text_otsu
+       # ----------------------------
+# OCR selection
+# ----------------------------
 
         results = []
 
-        #original 6,4,11,5
-        for psm in [4,6,11]:
+        for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
+            for psm in [4, 6, 11]:
 
-            print("Running PSM",psm)
-            print(f"\rPSM mode: {psm}", end="", flush=True)
+                print(f"Running {img_name} - PSM {psm}")
 
-            text = pytesseract.image_to_string(
-                gray,
-                config=f"--psm {psm}"
-            )
-
-
-            text = text.replace("$ ","$")
-            text = text.replace(" ,",",")
-            text = text.replace(" .",".")
-
-
-            results.append(
-                (
-                    score_ocr(text),
-                    text
+                text = pytesseract.image_to_string(
+                    img,
+                    config=f"--oem 3 --psm {psm}"
                 )
-            )
 
+                text = text.replace("$ ", "$")
+                text = text.replace(" ,", ",")
+                text = text.replace(" .", ".")
 
-
-        best_score,best_text = max(
+                results.append(
+                    (
+                        score_ocr(text),
+                        text,
+                        img,
+                        img_name,
+                        psm
+                    )
+                )
+        
+        best_score, best_text, processed_img, best_method, best_psm = max(
             results,
-            key=lambda x:x[0]
+            key=lambda x: x[0]
         )
 
+        print(f"\nSelected preprocessing: {best_method}")
+        print(f"Selected PSM: {best_psm}")
+        print(f"Selected OCR score: {best_score}")
 
-        print(
-            "Selected OCR score:",
-            best_score
-        )
-
+        if len(best_text.strip()) < 10:
+            print("Poor OCR result, skipping.")
+            continue
 
         lines = [
-            x.strip()
-            for x in best_text.splitlines()
-            if x.strip()
+            line.strip()
+            for line in best_text.splitlines()
+            if line.strip()
         ]
-    
-        with open(
-            DEBUG_OCR_FILE,
-            "a",
-            encoding="utf-8"
-        ) as f:
+        if len(extracted_text.strip()) < 10:
+            print("Poor OCR result, skipping.")
+            continue
 
-            f.write("\n\n---"+filename+"---\n")
+        with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n\n--- {filename} ---\n")
+            f.write(f"Method: {best_method}, PSM: {best_psm}\n\n")
 
             for line in lines:
-                f.write(line+"\n")
+                f.write(line + "\n")
             
         # detect store
         store = "Unknown"
