@@ -151,7 +151,7 @@ def process_receipts():
             for line in best_text.splitlines()
             if line.strip()
         ]
-        if len(extracted_text.strip()) < 10:
+        if len(best_text.strip()) < 10:
             print("Poor OCR result, skipping.")
             continue
 
@@ -244,3 +244,5 @@ def process_receipts():
 
     conn.close()
 print("\nFinished, receipt info updated.")
+if __name__ == "__main__":
+    process_receipts()
