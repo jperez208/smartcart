@@ -104,9 +104,9 @@ def process_receipts():
         results = []
 
         for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
-            for psm in [4, 6, 11]:
+            for psm in [4, 6]:
 
-                print(f"\rPSM mode: {psm}", end="", flush=True))
+                print(f"\rPSM mode: {psm}", end="", flush=True)
 
                 text = pytesseract.image_to_string(
                     img,
