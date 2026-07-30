@@ -56,7 +56,7 @@ def process_receipts():
     cur = conn.cursor()
 
     # Set timeout limit per OCR attempt in seconds
-    TIMEOUT_LIMIT = 30.0
+    TIMEOUT_LIMIT = 90.0
 
     for filename in sorted(os.listdir(RECEIPT_FOLDER)):
         
