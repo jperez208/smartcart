@@ -3,9 +3,11 @@ import cv2
 import pytesseract
 import re
 import hashlib
+import numpy as np
 from utils import *
 from db import get_connection
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
 
 
 RECEIPT_FOLDER = "receipts"
@@ -81,6 +83,30 @@ def process_receipts():
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
         gray = cv2.fastNlMeansDenoising(gray)
+        # ----------------------------
+        # Deskew
+        # ----------------------------
+        coords = np.column_stack(np.where(gray > 0))
+
+        angle = cv2.minAreaRect(coords)[-1]
+
+        if angle < -45:
+            angle = -(90 + angle)
+        else:
+            angle = -angle
+
+        (h, w) = gray.shape[:2]
+        center = (w // 2, h // 2)
+
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+
+        gray = cv2.warpAffine(
+            gray,
+            M,
+            (w, h),
+            flags=cv2.INTER_CUBIC,
+            borderMode=cv2.BORDER_REPLICATE
+        )
 
         # Otsu threshold
         otsu = cv2.threshold(
@@ -105,10 +131,17 @@ def process_receipts():
         # ----------------------------
         results = []
 
-        for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
-            for psm in [4, 6]:  # Added 11 back to the list safely
+        GOOD_SCORE = 90
+        found_good = False
 
-                print(f"\rMethod: {img_name} | PSM mode: {psm}      ", end="", flush=True)
+        for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
+            for psm in [4, 6]:
+
+                print(
+                    f"\rMethod: {img_name} | PSM mode: {psm}      ",
+                    end="",
+                    flush=True
+                )
 
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(
@@ -118,19 +151,18 @@ def process_receipts():
                     )
 
                     try:
-                        # Force move-on if Tesseract takes longer than TIMEOUT_LIMIT
                         text = future.result(timeout=TIMEOUT_LIMIT)
 
                         text = text.replace("$ ", "$")
                         text = text.replace(" ,", ",")
                         text = text.replace(" .", ".")
-                        
+
                         score = score_ocr(text)
 
                     except TimeoutError:
                         print(f"\n[Timeout skipped] {img_name} hung on PSM {psm}")
                         text = ""
-                        score = -1  # Negative score prevents max() from choosing this run
+                        score = -1
 
                     except Exception as e:
                         print(f"\n[Error skipped] {img_name} failed on PSM {psm}: {e}")
@@ -146,7 +178,16 @@ def process_receipts():
                         psm
                     )
                 )
-        
+
+                # Stop trying additional OCR methods if this one is already very good
+                if score >= GOOD_SCORE:
+                    print(f"\nGood OCR score ({score}) reached. Skipping remaining OCR attempts.")
+                    found_good = True
+                    break
+
+            if found_good:
+                break
+
         best_score, best_text, processed_img, best_method, best_psm = max(
             results,
             key=lambda x: x[0]
