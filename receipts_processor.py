@@ -106,7 +106,7 @@ def process_receipts():
         results = []
 
         for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
-            for psm in:  # Added 11 back to the list safely
+            for psm in [4, 6, 11]:  # Added 11 back to the list safely
 
                 print(f"\rMethod: {img_name} | PSM mode: {psm}      ", end="", flush=True)
 
