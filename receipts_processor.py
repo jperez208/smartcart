@@ -174,14 +174,19 @@ def process_receipts():
                 f.write(line + "\n")
             
         # detect store
-        store = "Unknown"
+        found = False
+
         for line in lines[:15]:
             c = clean_item_name(line)
-            for key,val in STORE_NAMES.items():
+
+            for key, val in STORE_NAMES.items():
                 if key in c:
                     store = val
+                    found = True
                     break
-        print(f"\nStore: {store}")
+
+            if found:
+                break
         
         # detect date
         receipt_date = ""
