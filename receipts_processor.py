@@ -5,7 +5,7 @@ import re
 import hashlib
 from utils import *
 from db import get_connection
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 
 RECEIPT_FOLDER = "receipts"
@@ -55,6 +55,9 @@ def process_receipts():
     conn = get_connection()
     cur = conn.cursor()
 
+    # Set timeout limit per OCR attempt in seconds
+    TIMEOUT_LIMIT = 30.0
+
     for filename in sorted(os.listdir(RECEIPT_FOLDER)):
         
         if not filename.lower().endswith((".png",".jpg",".jpeg")):
@@ -70,7 +73,6 @@ def process_receipts():
         print("Processing", filename)
         print("======================")
 
-       # path = os.path.join(RECEIPT_FOLDER, filename)
         image = cv2.imread(path)
 
         if image is None:
@@ -80,7 +82,7 @@ def process_receipts():
         gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
         gray = cv2.fastNlMeansDenoising(gray)
 
-# Otsu threshold
+        # Otsu threshold
         otsu = cv2.threshold(
             gray,
             0,
@@ -88,7 +90,7 @@ def process_receipts():
             cv2.THRESH_BINARY + cv2.THRESH_OTSU
         )[1]
 
-# Adaptive threshold
+        # Adaptive threshold
         adaptive = cv2.adaptiveThreshold(
             gray,
             255,
@@ -97,29 +99,47 @@ def process_receipts():
             31,
             2
         )
-       # ----------------------------
-# OCR selection
-# ----------------------------
-
+        
+        # ----------------------------
+        # OCR selection
+        # ----------------------------
         results = []
 
         for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
-            for psm in [4, 6]:
+            for psm in:  # Added 11 back to the list safely
 
-                print(f"\rPSM mode: {psm}", end="", flush=True)
+                print(f"\rMethod: {img_name} | PSM mode: {psm}      ", end="", flush=True)
 
-                text = pytesseract.image_to_string(
-                    img,
-                    config=f"--oem 3 --psm {psm}"
-                )
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        pytesseract.image_to_string,
+                        img,
+                        config=f"--oem 3 --psm {psm}"
+                    )
 
-                text = text.replace("$ ", "$")
-                text = text.replace(" ,", ",")
-                text = text.replace(" .", ".")
+                    try:
+                        # Force move-on if Tesseract takes longer than TIMEOUT_LIMIT
+                        text = future.result(timeout=TIMEOUT_LIMIT)
+
+                        text = text.replace("$ ", "$")
+                        text = text.replace(" ,", ",")
+                        text = text.replace(" .", ".")
+                        
+                        score = score_ocr(text)
+
+                    except TimeoutError:
+                        print(f"\n[Timeout skipped] {img_name} hung on PSM {psm}")
+                        text = ""
+                        score = -1  # Negative score prevents max() from choosing this run
+
+                    except Exception as e:
+                        print(f"\n[Error skipped] {img_name} failed on PSM {psm}: {e}")
+                        text = ""
+                        score = -1
 
                 results.append(
                     (
-                        score_ocr(text),
+                        score,
                         text,
                         img,
                         img_name,
@@ -162,6 +182,7 @@ def process_receipts():
                     store = val
                     break
         print(f"\nStore: {store}")
+        
         # detect date
         receipt_date = ""
         for line in lines:
@@ -170,10 +191,10 @@ def process_receipts():
                 receipt_date = m.group()
                 break
         print(f"Date: {receipt_date}")
+        
         # ----------------------------
         # Store Address Detection
         # ----------------------------
-
         address = ""
         city_state = ""
         full_address = ""
@@ -230,12 +251,13 @@ def process_receipts():
             print(f"{clean} -> ${price:.2f}")
 
         mark_processed(cur, filename, path)
-
         conn.commit()
 
     conn.close()
+
 print("\nFinished, receipt info updated.")
 print("\nProcessing newly uploaded receipts.")
 print("\nPlease wait...")
+
 if __name__ == "__main__":
     process_receipts()
