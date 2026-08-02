@@ -301,7 +301,7 @@ def process_receipts():
 
     conn.close()
 
-print("\nFinished, receipt info updated.")
+    print("\nFinished, receipt info updated.")
 print("\nProcessing newly uploaded receipts.")
 print("\nPlease wait...")
 
