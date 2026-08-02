@@ -53,166 +53,109 @@ def process_receipts():
     except Exception:
         print("Tesseract OCR is not installed or configured.")
         return
-        
+
     conn = get_connection()
     cur = conn.cursor()
-
-    # Set timeout limit per OCR attempt in seconds
     TIMEOUT_LIMIT = 90.0
 
-    for filename in sorted(os.listdir(RECEIPT_FOLDER)):
-        
-        if not filename.lower().endswith((".png",".jpg",".jpeg")):
-            continue
+    # Share one thread pool across all items to reduce execution overhead
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        for filename in sorted(os.listdir(RECEIPT_FOLDER)):
+            if not filename.lower().endswith((".png", ".jpg", ".jpeg")):
+                continue
 
-        path = os.path.join(RECEIPT_FOLDER, filename)
+            path = os.path.join(RECEIPT_FOLDER, filename)
+            if already_processed(cur, path):
+                print(f"Skipping {filename} (already processed)")
+                continue
 
-        if already_processed(cur, path):
-            print(f"Skipping {filename} (already processed)")
-            continue
+            print("\n======================")
+            print("Processing", filename)
+            print("======================")
 
-        print("\n======================")
-        print("Processing", filename)
-        print("======================")
+            image = cv2.imread(path)
+            if image is None:
+                continue
 
-        image = cv2.imread(path)
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
+            gray = cv2.fastNlMeansDenoising(gray)
 
-        if image is None:
-            continue
-
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
-        gray = cv2.fastNlMeansDenoising(gray)
-        # ----------------------------
-        # Deskew
-        # ----------------------------
-        coords = np.column_stack(np.where(gray > 0))
-
-        angle = cv2.minAreaRect(coords)[-1]
-
-        if angle < -45:
-            angle = -(90 + angle)
-        else:
-            angle = -angle
-
-        (h, w) = gray.shape[:2]
-        center = (w // 2, h // 2)
-
-        M = cv2.getRotationMatrix2D(center, angle, 1.0)
-
-        gray = cv2.warpAffine(
-            gray,
-            M,
-            (w, h),
-            flags=cv2.INTER_CUBIC,
-            borderMode=cv2.BORDER_REPLICATE
-        )
-
-        # Otsu threshold
-        otsu = cv2.threshold(
-            gray,
-            0,
-            255,
-            cv2.THRESH_BINARY + cv2.THRESH_OTSU
-        )[1]
-
-        # Adaptive threshold
-        adaptive = cv2.adaptiveThreshold(
-            gray,
-            255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            31,
-            2
-        )
-        
-        # ----------------------------
-        # OCR selection
-        # ----------------------------
-        results = []
-
-        GOOD_SCORE = 90
-        found_good = False
-
-        for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
-            for psm in [4, 6]:
-
-                print(
-                    f"\rMethod: {img_name} | PSM mode: {psm}      ",
-                    end="",
-                    flush=True
-                )
-
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(
-                        pytesseract.image_to_string,
-                        img,
-                        config=f"--oem 3 --psm {psm}"
+            # ----------------------------
+            # Refined Deskew Logic
+            # ----------------------------
+            # Binarize temporarily to extract text contours rather than trusting raw pixels
+            thresh_for_angle = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+            coords = np.column_stack(np.where(thresh_for_angle > 0))
+            
+            if coords.size > 0:
+                angle = cv2.minAreaRect(coords)[-1]
+                if angle < -45:
+                    angle = -(90 + angle)
+                else:
+                    angle = -angle
+                
+                # Moderate extreme adjustments to prevent erratic image spinning
+                if abs(angle) < 25: 
+                    (h, w) = gray.shape[:2]
+                    center = (w // 2, h // 2)
+                    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                    gray = cv2.warpAffine(
+                        gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
                     )
 
+            # Re-generate image variations after deskewing
+            otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+            adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 2)
+
+            # ----------------------------
+            # OCR selection
+            # ----------------------------
+            results = []
+            GOOD_SCORE = 90
+            found_good = False
+
+            for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
+                for psm in:
+                    print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
+                    
+                    future = executor.submit(pytesseract.image_to_string, img, config=f"--oem 3 --psm {psm}")
                     try:
                         text = future.result(timeout=TIMEOUT_LIMIT)
-
-                        text = text.replace("$ ", "$")
-                        text = text.replace(" ,", ",")
-                        text = text.replace(" .", ".")
-
+                        text = text.replace("$ ", "$").replace(" ,", ",").replace(" .", ".")
                         score = score_ocr(text)
-
                     except TimeoutError:
                         print(f"\n[Timeout skipped] {img_name} hung on PSM {psm}")
-                        text = ""
-                        score = -1
-
+                        text, score = "", -1
                     except Exception as e:
                         print(f"\n[Error skipped] {img_name} failed on PSM {psm}: {e}")
-                        text = ""
-                        score = -1
+                        text, score = "", -1
 
-                results.append(
-                    (
-                        score,
-                        text,
-                        img,
-                        img_name,
-                        psm
-                    )
-                )
+                    results.append((score, text, img, img_name, psm))
 
-                # Stop trying additional OCR methods if this one is already very good
-                if score >= GOOD_SCORE:
-                    print(f"\nGood OCR score ({score}) reached. Skipping remaining OCR attempts.")
-                    found_good = True
+                    if score >= GOOD_SCORE:
+                        print(f"\nGood OCR score ({score}) reached. Skipping remaining OCR attempts.")
+                        found_good = True
+                        break
+                if found_good:
                     break
 
-            if found_good:
-                break
+            best_score, best_text, processed_img, best_method, best_psm = max(results, key=lambda x: x[0])
+            print(f"\n\033[92mSelected preprocessing:\033[0m \033[1;92m {best_method}\033[0m")
+            print(f"\033[92mSelected PSM:\033[0m \033[1;92m {best_psm}\033[0m")
+            print(f"\033[92mSelected OCR score:\033[0m \033[1;92m {best_score}\033[0m")
 
-        best_score, best_text, processed_img, best_method, best_psm = max(
-            results,
-            key=lambda x: x[0]
-        )
+            if len(best_text.strip()) < 10:
+                print("Poor OCR result, skipping.")
+                continue
 
-        print(f"\n\033[92mSelected preprocessing:\033[0m \033[1;92m {best_method}\033[0m")
-        print(f"\033[92mSelected PSM:\033[0m \033[1;92m {best_psm}\033[0m")
-        print(f"\033[92mSelected OCR score:\033[0m \033[1;92m {best_score}\033[0m")
+            lines = [line.strip() for line in best_text.splitlines() if line.strip()]
 
-        if len(best_text.strip()) < 10:
-            print("Poor OCR result, skipping.")
-            continue
-
-        lines = [
-            line.strip()
-            for line in best_text.splitlines()
-            if line.strip()
-        ]
-
-        with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n\n--- {filename} ---\n")
-            f.write(f"Method: {best_method}, PSM: {best_psm}\n\n")
-
-            for line in lines:
-                f.write(line + "\n")
+            with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+                f.write(f"\n\n--- {filename} ---\n")
+                f.write(f"Method: {best_method}, PSM: {best_psm}\n\n")
+                for line in lines:
+                    f.write(line + "\n")
             
         # detect store
         found = False
