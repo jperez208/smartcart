@@ -116,7 +116,7 @@ def process_receipts():
             found_good = False
 
             for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
-                for psm in:
+                for psm in [4,6]:
                     print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
                     
                     future = executor.submit(pytesseract.image_to_string, img, config=f"--oem 3 --psm {psm}")
