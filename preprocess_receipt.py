@@ -528,6 +528,162 @@ def crop_borders(image, padding=30):
 
 
     return cropped
+
+# =====================================================
+# Generate OCR Variants
+# =====================================================
+
+def generate_variants(image):
+    """
+    Creates multiple OCR-ready images.
+
+    Returns:
+        [
+            ("Gray", image),
+            ("CLAHE", image),
+            ("Otsu", image),
+            ("Adaptive", image),
+            ...
+        ]
+    """
+
+    variants = []
+
+
+    # Ensure grayscale
+
+    if len(image.shape) == 3:
+
+        gray = cv2.cvtColor(
+            image,
+            cv2.COLOR_BGR2GRAY
+        )
+
+    else:
+
+        gray = image.copy()
+
+
+    # -------------------------
+    # Raw grayscale
+    # -------------------------
+
+    variants.append(
+        (
+            "Gray",
+            gray
+        )
+    )
+
+
+    # -------------------------
+    # CLAHE
+    # -------------------------
+
+    clahe = cv2.createCLAHE(
+        clipLimit=2.5,
+        tileGridSize=(8,8)
+    )
+
+    clahe_img = clahe.apply(
+        gray
+    )
+
+
+    variants.append(
+        (
+            "CLAHE",
+            clahe_img
+        )
+    )
+
+
+    # -------------------------
+    # OTSU
+    # -------------------------
+
+    otsu = cv2.threshold(
+        gray,
+        0,
+        255,
+        cv2.THRESH_BINARY +
+        cv2.THRESH_OTSU
+    )[1]
+
+
+    variants.append(
+        (
+            "Otsu",
+            otsu
+        )
+    )
+
+
+    # -------------------------
+    # Adaptive threshold
+    # -------------------------
+
+    adaptive = cv2.adaptiveThreshold(
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        31,
+        10
+    )
+
+
+    variants.append(
+        (
+            "Adaptive",
+            adaptive
+        )
+    )
+
+
+    # -------------------------
+    # Adaptive inverted
+    # -------------------------
+
+    adaptive_inv = cv2.bitwise_not(
+        adaptive
+    )
+
+
+    variants.append(
+        (
+            "AdaptiveInv",
+            adaptive_inv
+        )
+    )
+
+
+    # -------------------------
+    # Morphological cleanup
+    # -------------------------
+
+    kernel = np.ones(
+        (2,2),
+        np.uint8
+    )
+
+
+    morph = cv2.morphologyEx(
+        otsu,
+        cv2.MORPH_CLOSE,
+        kernel
+    )
+
+
+    variants.append(
+        (
+            "Morph",
+            morph
+        )
+    )
+
+
+    return variants
     
 if __name__ == "__main__":
 
@@ -551,13 +707,37 @@ if __name__ == "__main__":
 
     cropped = crop_borders(deskewed)
 
-
-    cv2.imwrite(
-        "debug_cropped.jpg",
+    variants = generate_variants(
         cropped
     )
 
-    print(
-        "Saved debug_cropped.jpg",
-        cropped.shape
-    )
+
+    for name, img in variants:
+
+        filename = (
+            "debug_"
+            + name
+            + ".jpg"
+        )
+
+        cv2.imwrite(
+            filename,
+            img
+        )
+
+        print(
+            "Saved:",
+            filename,
+            img.shape
+        )
+
+
+        cv2.imwrite(
+            "debug_cropped.jpg",
+            cropped
+        )
+
+        print(
+            "Saved debug_cropped.jpg",
+            cropped.shape
+        )
