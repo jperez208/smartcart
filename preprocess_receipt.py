@@ -194,10 +194,27 @@ def detect_receipt(image):
             len(approx)
         )
 
+      if len(approx) == 4:
 
-        if len(approx) == 4:
+        x,y,w,h = cv2.boundingRect(approx)
 
-            print("FOUND RECEIPT")
+        aspect = w / float(h)
+
+        area_ratio = area / image_area
+
+
+        # Receipt is usually taller than wide
+        # and should occupy significant area
+
+        if (
+            area_ratio > 0.25
+            and h > w
+            and aspect < 1.0
+        ):
+
+            print("Receipt candidate:")
+            print("area ratio:", area_ratio)
+            print("size:", w, h)
 
             return approx.reshape(4,2)
 
