@@ -184,7 +184,7 @@ def process_receipts():
                 if line.strip()
             ]
 
-            print("OCR lines:", len(lines))
+           # print("OCR lines:", len(lines))
             with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
                f.write(f"\n\n--- {filename} ---\n")
                f.write(f"Method: {best_method}, PSM: {best_psm}\n\n")
