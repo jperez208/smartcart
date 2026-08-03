@@ -78,10 +78,13 @@ def process_receipts():
             if image is None:
                 continue
 
+            #Change Following to debug=False after testing
             variants = preprocess_receipt(
-            image,
-            debug=True
-        )
+                image,
+                debug=True
+            )
+                
+            
             # ----------------------------
             # OCR selection
             # ----------------------------
