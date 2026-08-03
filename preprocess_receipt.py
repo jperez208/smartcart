@@ -224,6 +224,39 @@ def detect_receipt(image):
 
 
     return None
+# =====================================================
+# Perspective Correction
+# =====================================================
+
+def perspective_correct(image):
+    """
+    Detects receipt and flattens it.
+    
+    If no receipt is detected,
+    returns the original image.
+    """
+
+    corners = detect_receipt(image)
+
+
+    if corners is None:
+
+        print("No receipt boundary found. Using original image.")
+
+        return image
+
+
+    print("Receipt corners:")
+    print(corners)
+
+
+    corrected = four_point_transform(
+        image,
+        corners
+    )
+
+
+    return corrected
     
 if __name__ == "__main__":
 
@@ -237,7 +270,16 @@ if __name__ == "__main__":
 
     print("Loaded image:", img.shape)
 
-    corners = detect_receipt(img)
+    corrected = perspective_correct(img)
 
-    print("Corners:")
-    print(corners)
+
+    cv2.imwrite(
+        "debug_warped.jpg",
+        corrected
+    )
+
+
+    print(
+        "Saved debug_warped.jpg",
+        corrected.shape
+    )
