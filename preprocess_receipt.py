@@ -109,39 +109,24 @@ def four_point_transform(image, pts):
 # =====================================================
 
 def detect_receipt(image):
-    """
-    Finds the largest 4-point contour.
-    Assumes it is the receipt.
-
-    Returns:
-        4 corner points or None
-    """
 
     gray = cv2.cvtColor(
         image,
         cv2.COLOR_BGR2GRAY
     )
 
-
-    # Reduce noise
-
     blur = cv2.GaussianBlur(
         gray,
-        (5, 5),
+        (5,5),
         0
     )
 
-
-    # Detect edges
-
     edges = cv2.Canny(
         blur,
-        60,
-        180
+        30,
+        150
     )
 
-
-    # Strengthen edges
 
     kernel = np.ones(
         (5,5),
@@ -154,14 +139,13 @@ def detect_receipt(image):
         iterations=2
     )
 
-    edges = cv2.erode(
-        edges,
-        kernel,
-        iterations=1
+
+    # save edge image
+    cv2.imwrite(
+        "debug_edges.jpg",
+        edges
     )
 
-
-    # Find contours
 
     contours, _ = cv2.findContours(
         edges,
@@ -170,11 +154,8 @@ def detect_receipt(image):
     )
 
 
-    if not contours:
-        return None
+    print("Contours found:", len(contours))
 
-
-    # Largest objects first
 
     contours = sorted(
         contours,
@@ -183,22 +164,16 @@ def detect_receipt(image):
     )
 
 
-    image_area = (
-        image.shape[0] *
-        image.shape[1]
-    )
-
-
-    for contour in contours:
-
+    for i, contour in enumerate(contours[:10]):
 
         area = cv2.contourArea(contour)
 
-
-        # Ignore tiny objects
-
-        if area < image_area * 0.15:
-            continue
+        print(
+            "Contour",
+            i,
+            "area:",
+            area
+        )
 
 
         perimeter = cv2.arcLength(
@@ -209,19 +184,26 @@ def detect_receipt(image):
 
         approx = cv2.approxPolyDP(
             contour,
-            0.02 * perimeter,
+            0.03 * perimeter,
             True
         )
 
 
-        # Receipt should be rectangle
+        print(
+            "points:",
+            len(approx)
+        )
+
 
         if len(approx) == 4:
+
+            print("FOUND RECEIPT")
 
             return approx.reshape(4,2)
 
 
     return None
+    
 if __name__=="__main__":
     img = cv2.imread("test_receipt.jpg")
     corners = detect_receipt(img)
