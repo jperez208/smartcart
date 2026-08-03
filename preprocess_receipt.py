@@ -684,60 +684,202 @@ def generate_variants(image):
 
 
     return variants
+
+# =====================================================
+# Main Preprocessing Pipeline
+# =====================================================
+
+def preprocess_receipt(
+    image,
+    debug=False,
+    debug_dir=DEBUG_DIR
+):
+    """
+    Complete receipt preprocessing pipeline.
+
+    Returns:
+        [
+            ("Gray", image),
+            ("CLAHE", image),
+            ("Otsu", image),
+            ("Adaptive", image),
+            ("AdaptiveInv", image),
+            ("Morph", image)
+        ]
+    """
+
+
+    if image is None:
+        raise ValueError(
+            "Invalid image supplied"
+        )
+
+
+    # ---------------------------------
+    # Step 1: Perspective correction
+    # ---------------------------------
+
+    processed = perspective_correct(
+        image
+    )
+
+
+    if debug:
+        os.makedirs(
+            debug_dir,
+            exist_ok=True
+        )
+
+        cv2.imwrite(
+            os.path.join(
+                debug_dir,
+                "01_perspective.jpg"
+            ),
+            processed
+        )
+
+
+    # ---------------------------------
+    # Step 2: Resize
+    # ---------------------------------
+
+    processed = resize_receipt(
+        processed
+    )
+
+
+    if debug:
+
+        cv2.imwrite(
+            os.path.join(
+                debug_dir,
+                "02_resize.jpg"
+            ),
+            processed
+        )
+
+
+    # ---------------------------------
+    # Step 3: Enhance
+    # ---------------------------------
+
+    processed = enhance_receipt(
+        processed
+    )
+
+
+    if debug:
+
+        cv2.imwrite(
+            os.path.join(
+                debug_dir,
+                "03_enhanced.jpg"
+            ),
+            processed
+        )
+
+
+    # ---------------------------------
+    # Step 4: Deskew
+    # ---------------------------------
+
+    processed = deskew_receipt(
+        processed
+    )
+
+
+    if debug:
+
+        cv2.imwrite(
+            os.path.join(
+                debug_dir,
+                "04_deskew.jpg"
+            ),
+            processed
+        )
+
+
+    # ---------------------------------
+    # Step 5: Crop borders
+    # ---------------------------------
+
+    processed = crop_borders(
+        processed
+    )
+
+
+    if debug:
+
+        cv2.imwrite(
+            os.path.join(
+                debug_dir,
+                "05_crop.jpg"
+            ),
+            processed
+        )
+
+
+    # ---------------------------------
+    # Step 6: OCR variants
+    # ---------------------------------
+
+    variants = generate_variants(
+        processed
+    )
+
+
+    if debug:
+
+        for name, img in variants:
+
+            cv2.imwrite(
+                os.path.join(
+                    debug_dir,
+                    f"06_{name}.jpg"
+                ),
+                img
+            )
+
+
+    return variants
     
 if __name__ == "__main__":
 
     img_path = "./receipts/test_receipt.jpg"
 
-    img = cv2.imread(img_path)
 
-    if img is None:
-        print("Could not load:", img_path)
-        exit()
-
-    print("Loaded image:", img.shape)
-
-    corrected = perspective_correct(img)
-
-    resized = resize_receipt(corrected)
-
-    enhanced = enhance_receipt(resized)
-
-    deskewed = deskew_receipt(enhanced)
-
-    cropped = crop_borders(deskewed)
-
-    variants = generate_variants(
-        cropped
+    img = cv2.imread(
+        img_path
     )
 
 
-    for name, img in variants:
-
-        filename = (
-            "debug_"
-            + name
-            + ".jpg"
-        )
-
-        cv2.imwrite(
-            filename,
-            img
-        )
+    if img is None:
 
         print(
-            "Saved:",
-            filename,
-            img.shape
+            "Could not load:",
+            img_path
         )
 
+        exit()
 
-        cv2.imwrite(
-            "debug_cropped.jpg",
-            cropped
-        )
+
+    print(
+        "Loaded:",
+        img.shape
+    )
+
+
+    variants = preprocess_receipt(
+        img,
+        debug=True
+    )
+
+
+    print("\nOCR Variants:")
+
+    for name, image in variants:
 
         print(
-            "Saved debug_cropped.jpg",
-            cropped.shape
+            name,
+            image.shape
         )
