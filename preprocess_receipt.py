@@ -194,7 +194,7 @@ def detect_receipt(image):
             len(approx)
         )
 
-          if len(approx) == 4:
+        if len(approx) == 4:
 
             x,y,w,h = cv2.boundingRect(approx)
 
@@ -219,7 +219,7 @@ def detect_receipt(image):
                 return approx.reshape(4,2)
 
 
-    return None
+return None
     
 if __name__ == "__main__":
 
