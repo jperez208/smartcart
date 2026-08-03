@@ -89,7 +89,7 @@ def process_receipts():
             # OCR selection
             # ----------------------------
             results = []
-            GOOD_SCORE = 90
+            GOOD_SCORE = 60
             found_good = False
 
             for img_name, img in variants:
@@ -124,10 +124,12 @@ def process_receipts():
                 if found_good:
                     break
 
-                if not results:
-                    print("No OCR results generated. Skipping.")
-                    continue
-
+                if len(best_text.strip()) < 10:
+                    print("Very poor OCR result, saving for debugging.")
+    
+                    with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+                    f.write(f"\n\n--- {filename} FAILED OCR ---\n")
+                    f.write(best_text)
 
             best_score, best_text, processed_img, best_method, best_psm = max(
                 results,
