@@ -114,7 +114,16 @@ def process_receipts():
                     except Exception as e:
                         print(f"\n[Error skipped] {img_name} failed on PSM {psm}: {e}")
                         text, score = "", -1
-
+                    print(
+                        "OCR result:",
+                        img_name,
+                        "PSM:",
+                        psm,
+                        "chars:",
+                        len(text),
+                        "score:",
+                        score
+                    )
                     results.append((score, text, img, img_name, psm))
 
                     if score >= GOOD_SCORE:
