@@ -184,6 +184,11 @@ def process_receipts():
                     f.write(best_text)
         
                 continue
+                lines = [
+                    line.strip()
+                    for line in best_text.splitlines()
+                    if line.strip()
+                    ]
             
             # detect store
             store = "Unknown"
