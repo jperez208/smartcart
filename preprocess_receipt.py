@@ -115,57 +115,56 @@ def detect_receipt(image):
         cv2.COLOR_BGR2GRAY
     )
 
+
+    # Improve contrast
+
     blur = cv2.GaussianBlur(
         gray,
         (5,5),
         0
     )
-    thresh = cv2.adaptiveThreshold(
-        blur,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        31,
-        10
-    )
-    edges = cv2.Canny(
-        blur,
-        30,
-        150
-    )
 
+
+    # Separate receipt from background
+
+    thresh = cv2.threshold(
+        blur,
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )[1]
+
+
+    # Make receipt edges stronger
 
     kernel = np.ones(
-        (5,5),
+        (7,7),
         np.uint8
     )
 
-    edges = cv2.dilate(
-        edges,
+    thresh = cv2.morphologyEx(
+        thresh,
+        cv2.MORPH_CLOSE,
         kernel,
-        iterations=2
+        iterations=3
     )
 
 
-    # save edge image
     cv2.imwrite(
-        "debug_edges.jpg",
-        edges
+        "debug_threshold.jpg",
+        thresh
     )
 
 
     contours, _ = cv2.findContours(
-        edges,
-        cv2.RETR_LIST,
+        thresh,
+        cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE
     )
 
+
     if not contours:
         return None
-
-    image_area = image.shape[0] * image.shape[1]
-    
-    print("Contours found:", len(contours))
 
 
     contours = sorted(
@@ -173,6 +172,15 @@ def detect_receipt(image):
         key=cv2.contourArea,
         reverse=True
     )
+
+
+    image_area = (
+        image.shape[0] *
+        image.shape[1]
+    )
+
+
+    print("Contours found:", len(contours))
 
 
     for i, contour in enumerate(contours[:10]):
@@ -187,6 +195,10 @@ def detect_receipt(image):
         )
 
 
+        if area < image_area * 0.10:
+            continue
+
+
         perimeter = cv2.arcLength(
             contour,
             True
@@ -195,7 +207,7 @@ def detect_receipt(image):
 
         approx = cv2.approxPolyDP(
             contour,
-            0.015 * perimeter,
+            0.02 * perimeter,
             True
         )
 
@@ -205,29 +217,12 @@ def detect_receipt(image):
             len(approx)
         )
 
+
         if len(approx) == 4:
 
-            x,y,w,h = cv2.boundingRect(approx)
+            print("FOUND RECEIPT")
 
-            aspect = w / float(h)
-
-            area_ratio = area / image_area
-
-
-            # Receipt is usually taller than wide
-            # and should occupy significant area
-
-            if (
-                h > w
-                and aspect < 0.9
-                and h > image.shape[0] * 0.35
-            ):
-
-                print("Receipt candidate:")
-                print("area ratio:", area_ratio)
-                print("size:", w, h)
-
-                return approx.reshape(4,2)
+            return approx.reshape(4,2)
 
 
     return None
