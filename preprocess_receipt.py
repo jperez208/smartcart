@@ -204,8 +204,19 @@ def detect_receipt(image):
 
     return None
     
-if __name__=="__main__":
-    img = cv2.imread("test_receipt.jpg")
+if __name__ == "__main__":
+
+    img_path = "./receipts/test_receipt.jpg"
+
+    img = cv2.imread(img_path)
+
+    if img is None:
+        print("Could not load:", img_path)
+        exit()
+
+    print("Loaded image:", img.shape)
+
     corners = detect_receipt(img)
+
+    print("Corners:")
     print(corners)
-    
