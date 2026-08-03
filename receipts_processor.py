@@ -179,10 +179,10 @@ def process_receipts():
                 print("Poor OCR result, skipping.")
                 continue
             lines = [
-                 line.strip()
-                 for line in best_text.splitlines()
-                 if line.strip()
-             ]
+                line.strip()
+                for line in best_text.splitlines()
+                if line.strip()
+            ]
 
             print("OCR lines:", len(lines))
             with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
