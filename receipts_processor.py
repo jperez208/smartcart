@@ -128,9 +128,9 @@ def process_receipts():
                     print("Very poor OCR result, saving for debugging.")
     
                     with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-                    f.write(f"\n\n--- {filename} FAILED OCR ---\n")
-                    f.write(best_text)
-
+                        f.write(f"\n\n--- {filename} FAILED OCR ---\n")
+                        f.write(best_text)
+    
             best_score, best_text, processed_img, best_method, best_psm = max(
                 results,
                 key=lambda x: x[0]
