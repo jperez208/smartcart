@@ -650,12 +650,12 @@ def generate_variants(image):
     )
 
 
-    variants.append(
+   ''' variants.append(
         (
-            "AdaptiveInv",
-            adaptive_inv
+           "AdaptiveInv",
+           adaptive_inv
         )
-    )
+    )'''
 
 
     # -------------------------
@@ -675,12 +675,12 @@ def generate_variants(image):
     )
 
 
-    variants.append(
+'''    variants.append(
         (
             "Morph",
             morph
         )
-    )
+    )'''
 
 
     return variants
@@ -803,9 +803,9 @@ def preprocess_receipt(
     # Step 5: Crop borders
     # ---------------------------------
 
-    processed = crop_borders(
-        processed
-    )
+    #processed = crop_borders(
+   #     processed
+    #)
 
 
     if debug:
