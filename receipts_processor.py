@@ -89,7 +89,7 @@ def process_receipts():
             GOOD_SCORE = 90
             found_good = False
 
-            for img_name, img in [("Otsu", otsu), ("Adaptive", adaptive)]:
+            for img_name, img in variants:
                 for psm in [4,6]:
                     print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
                     
