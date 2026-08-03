@@ -93,7 +93,7 @@ def process_receipts():
             found_good = False
 
             for img_name, img in variants:
-                for psm in [4,6]:
+                for psm in [4,6,11]:
                     print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
                     
                     future = executor.submit(pytesseract.image_to_string, img, config=f"--oem 3 --psm {psm}")
@@ -117,7 +117,15 @@ def process_receipts():
                 if found_good:
                     break
 
-            best_score, best_text, processed_img, best_method, best_psm = max(results, key=lambda x: x[0])
+                if not results:
+                    print("No OCR results generated. Skipping.")
+                    continue
+
+
+            best_score, best_text, processed_img, best_method, best_psm = max(
+                results,
+                key=lambda x: x[0]
+            )
             print(f"\n\033[92mSelected preprocessing:\033[0m \033[1;92m {best_method}\033[0m")
             print(f"\033[92mSelected PSM:\033[0m \033[1;92m {best_psm}\033[0m")
             print(f"\033[92mSelected OCR score:\033[0m \033[1;92m {best_score}\033[0m")
