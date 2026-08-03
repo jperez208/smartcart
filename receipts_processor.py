@@ -4,6 +4,7 @@ import pytesseract
 import re
 import hashlib
 import numpy as np
+import preprocess_receipt
 from utils import *
 from db import get_connection
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
