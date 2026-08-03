@@ -158,6 +158,7 @@ def process_receipts():
                     f.write(line + "\n")
             
             # detect store
+            store = "Unknown"
             found = False
 
             for line in lines[:15]:
