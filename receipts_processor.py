@@ -57,7 +57,7 @@ def process_receipts():
 
     conn = get_connection()
     cur = conn.cursor()
-    TIMEOUT_LIMIT = 30.0
+    TIMEOUT_LIMIT = 20.0
 
     # Share one thread pool across all items to reduce execution overhead
     with ThreadPoolExecutor(max_workers=1) as executor:
@@ -93,7 +93,7 @@ def process_receipts():
             found_good = False
 
             for img_name, img in variants:
-                for psm in [4,6,11]:
+                for psm in [4,6]:
                     print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
                     
                     future = executor.submit(pytesseract.image_to_string, img, config=f"--oem 3 --psm {psm}")
