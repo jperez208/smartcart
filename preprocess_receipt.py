@@ -220,10 +220,22 @@ def detect_receipt(image):
 
         if len(approx) == 4:
 
+            x, y, w, h = cv2.boundingRect(approx)
+
+        # Reject full image border
+            if (
+                x <= 2
+                and y <= 2
+                and w >= image.shape[1] - 5
+                and h >= image.shape[0] - 5
+            ):
+                print("Ignoring full image contour")
+                continue
+
+
             print("FOUND RECEIPT")
 
             return approx.reshape(4,2)
-
 
     return None
 # =====================================================
