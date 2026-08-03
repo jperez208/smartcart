@@ -441,6 +441,93 @@ def deskew_receipt(image):
 
 
     return rotated
+
+# =====================================================
+# Crop Empty Borders
+# =====================================================
+
+def crop_borders(image, padding=30):
+    """
+    Removes large empty areas around text.
+    Keeps a small border for OCR.
+    """
+
+    if len(image.shape) == 3:
+
+        gray = cv2.cvtColor(
+            image,
+            cv2.COLOR_BGR2GRAY
+        )
+
+    else:
+
+        gray = image.copy()
+
+
+    # Find text
+
+    thresh = cv2.threshold(
+        gray,
+        0,
+        255,
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )[1]
+
+
+    coords = cv2.findNonZero(
+        thresh
+    )
+
+
+    if coords is None:
+        print("No text found for cropping.")
+        return image
+
+
+    x, y, w, h = cv2.boundingRect(
+        coords
+    )
+
+
+    height, width = gray.shape
+
+
+    # Add padding
+
+    x1 = max(
+        x - padding,
+        0
+    )
+
+    y1 = max(
+        y - padding,
+        0
+    )
+
+    x2 = min(
+        x + w + padding,
+        width
+    )
+
+    y2 = min(
+        y + h + padding,
+        height
+    )
+
+
+    cropped = image[
+        y1:y2,
+        x1:x2
+    ]
+
+
+    print(
+        "Crop:",
+        cropped.shape
+    )
+
+
+    return cropped
     
 if __name__ == "__main__":
 
@@ -462,14 +549,15 @@ if __name__ == "__main__":
 
     deskewed = deskew_receipt(enhanced)
 
+    cropped = crop_borders(deskewed)
+
 
     cv2.imwrite(
-        "debug_deskewed.jpg",
-        deskewed
+        "debug_cropped.jpg",
+        cropped
     )
 
-
     print(
-        "Saved debug_deskewed.jpg",
-        deskewed.shape
+        "Saved debug_cropped.jpg",
+        cropped.shape
     )
