@@ -219,7 +219,7 @@ def detect_receipt(image):
                 return approx.reshape(4,2)
 
 
-return None
+    return None
     
 if __name__ == "__main__":
 
