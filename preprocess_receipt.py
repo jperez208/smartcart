@@ -153,7 +153,11 @@ def detect_receipt(image):
         cv2.CHAIN_APPROX_SIMPLE
     )
 
+    if not contours:
+    return None
 
+    image_area = image.shape[0] * image.shape[1]
+    
     print("Contours found:", len(contours))
 
 
