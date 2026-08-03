@@ -7,7 +7,7 @@ import os
 # Configuration
 # =====================================================
 
-TARGET_WIDTH = 2000
+TARGET_WIDTH = 1600
 
 DEBUG_DIR = "debug_preprocess"
 
