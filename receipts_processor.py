@@ -93,9 +93,16 @@ def process_receipts():
             found_good = False
 
             for img_name, img in variants:
-                for psm in [4,6]:
+                for psm in [4,11]:
                     print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
-                    
+                    if img.shape[1] > 1800:
+                        img = cv2.resize(
+                        img,
+                        None,
+                        fx=0.75,
+                        fy=0.75,
+                        interpolation=cv2.INTER_AREA
+                    )
                     future = executor.submit(pytesseract.image_to_string, img, config=f"--oem 3 --psm {psm}")
                     try:
                         text = future.result(timeout=TIMEOUT_LIMIT)
