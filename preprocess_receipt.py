@@ -149,7 +149,7 @@ def detect_receipt(image):
 
     contours, _ = cv2.findContours(
         edges,
-        cv2.RETR_EXTERNAL,
+        cv2.RETR_LIST,
         cv2.CHAIN_APPROX_SIMPLE
     )
 
@@ -194,29 +194,29 @@ def detect_receipt(image):
             len(approx)
         )
 
-      if len(approx) == 4:
+          if len(approx) == 4:
 
-        x,y,w,h = cv2.boundingRect(approx)
+            x,y,w,h = cv2.boundingRect(approx)
 
-        aspect = w / float(h)
+            aspect = w / float(h)
 
-        area_ratio = area / image_area
+            area_ratio = area / image_area
 
 
-        # Receipt is usually taller than wide
-        # and should occupy significant area
+            # Receipt is usually taller than wide
+            # and should occupy significant area
 
-        if (
-            area_ratio > 0.25
-            and h > w
-            and aspect < 1.0
-        ):
+            if (
+                area_ratio > 0.25
+                and h > w
+                and aspect < 1.0
+            ):
 
-            print("Receipt candidate:")
-            print("area ratio:", area_ratio)
-            print("size:", w, h)
+                print("Receipt candidate:")
+                print("area ratio:", area_ratio)
+                print("size:", w, h)
 
-            return approx.reshape(4,2)
+                return approx.reshape(4,2)
 
 
     return None
