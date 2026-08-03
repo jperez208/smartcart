@@ -154,7 +154,7 @@ def detect_receipt(image):
     )
 
     if not contours:
-    return None
+        return None
 
     image_area = image.shape[0] * image.shape[1]
     
