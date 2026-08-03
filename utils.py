@@ -39,56 +39,28 @@ def normalize_price(value):
 def score_ocr(text):
 
     if not text:
-        return -100
+        return -999
 
     score = 0
 
-    lines = [
-        x.strip()
-        for x in text.splitlines()
-        if x.strip()
+    score += len(text) // 20
+
+    score += len(
+        re.findall(r'\d+\.\d{2}', text)
+    ) * 15
+
+    words = [
+        "TOTAL",
+        "TAX",
+        "SUBTOTAL",
+        "PRICE",
+        "ITEM"
     ]
 
-    # More readable lines = better
-    score += min(len(lines), 20)
+    upper = text.upper()
 
-    # Reward prices
-    prices = re.findall(
-        r'\d+\.\d{2}',
-        text
-    )
-
-    score += len(prices) * 10
-
-
-    # Reward currency
-    score += text.count("$") * 5
-
-
-    # Reward letters
-    letters = sum(
-        c.isalpha()
-        for c in text
-    )
-
-    score += min(
-        letters // 20,
-        30
-    )
-
-
-    # Penalize garbage
-    garbage = sum(
-        not(c.isalnum() or c in " $.,-/")
-        for c in text
-    )
-
-    score -= garbage * 2
-
-
-    # Too short is bad
-    if len(text) < 50:
-        score -= 20
-
+    for word in words:
+        if word in upper:
+            score += 20
 
     return score
