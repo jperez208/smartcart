@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
     corrected = perspective_correct(img)
     resized = resize_receipt(corrected)
-    enhanced = enhanced_receipt(resized)
+    enhanced = enhance_receipt(resized)
 
 
     cv2.imwrite(
