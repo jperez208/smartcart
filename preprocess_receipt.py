@@ -346,6 +346,101 @@ def enhance_receipt(image):
 
 
     return enhanced
+
+# =====================================================
+# Deskew Receipt
+# =====================================================
+
+def deskew_receipt(image):
+    """
+    Detects text angle and rotates image
+    to make text horizontal.
+    """
+
+    # Make sure we are working with grayscale
+
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(
+            image,
+            cv2.COLOR_BGR2GRAY
+        )
+    else:
+        gray = image.copy()
+
+
+    # Threshold text
+
+    thresh = cv2.threshold(
+        gray,
+        0,
+        255,
+        cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )[1]
+
+
+    # Find text pixel locations
+
+    coords = np.column_stack(
+        np.where(thresh > 0)
+    )
+
+
+    if len(coords) < 20:
+        print("Not enough text for deskew.")
+        return image
+
+
+    # Calculate angle
+
+    angle = cv2.minAreaRect(coords)[-1]
+
+
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+
+
+    print("Detected deskew angle:", angle)
+
+
+    # Ignore unrealistic rotations
+
+    if abs(angle) < 0.5:
+        return image
+
+
+    if abs(angle) > 15:
+        print("Ignoring extreme angle")
+        return image
+
+
+    height, width = image.shape[:2]
+
+
+    center = (
+        width // 2,
+        height // 2
+    )
+
+
+    matrix = cv2.getRotationMatrix2D(
+        center,
+        angle,
+        1.0
+    )
+
+
+    rotated = cv2.warpAffine(
+        image,
+        matrix,
+        (width, height),
+        flags=cv2.INTER_CUBIC,
+        borderMode=cv2.BORDER_REPLICATE
+    )
+
+
+    return rotated
     
 if __name__ == "__main__":
 
@@ -360,17 +455,21 @@ if __name__ == "__main__":
     print("Loaded image:", img.shape)
 
     corrected = perspective_correct(img)
+
     resized = resize_receipt(corrected)
+
     enhanced = enhance_receipt(resized)
+
+    deskewed = deskew_receipt(enhanced)
 
 
     cv2.imwrite(
-        "debug_warped.jpg",
-        enhanced
+        "debug_deskewed.jpg",
+        deskewed
     )
 
 
     print(
-        "Saved debug_warped.jpg",
-        enhanced.shape
+        "Saved debug_deskewed.jpg",
+        deskewed.shape
     )
