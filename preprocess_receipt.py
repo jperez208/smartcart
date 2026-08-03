@@ -271,6 +271,81 @@ def perspective_correct(image):
 
 
     return corrected
+
+def resize_receipt(image):
+    """
+    Normalize receipt size for OCR.
+    """
+
+    height, width = image.shape[:2]
+
+    if width == TARGET_WIDTH:
+        return image
+
+
+    scale = TARGET_WIDTH / width
+
+
+    resized = cv2.resize(
+        image,
+        None,
+        fx=scale,
+        fy=scale,
+        interpolation=cv2.INTER_CUBIC
+    )
+
+    return resized
+
+
+
+def enhance_receipt(image):
+    """
+    Improve contrast and text clarity.
+    """
+
+    gray = cv2.cvtColor(
+        image,
+        cv2.COLOR_BGR2GRAY
+    )
+
+
+    # Contrast enhancement
+
+    clahe = cv2.createCLAHE(
+        clipLimit=2.5,
+        tileGridSize=(8,8)
+    )
+
+    enhanced = clahe.apply(gray)
+
+
+    # Remove noise
+
+    enhanced = cv2.fastNlMeansDenoising(
+        enhanced,
+        None,
+        10,
+        7,
+        21
+    )
+
+
+    # Sharpen text
+
+    kernel = np.array([
+        [-1,-1,-1],
+        [-1, 9,-1],
+        [-1,-1,-1]
+    ])
+
+    enhanced = cv2.filter2D(
+        enhanced,
+        -1,
+        kernel
+    )
+
+
+    return enhanced
     
 if __name__ == "__main__":
 
@@ -285,15 +360,17 @@ if __name__ == "__main__":
     print("Loaded image:", img.shape)
 
     corrected = perspective_correct(img)
+    resized = resize_receipt(corrected)
+    enhanced = enhanced_receipt(resized)
 
 
     cv2.imwrite(
         "debug_warped.jpg",
-        corrected
+        enhanced
     )
 
 
     print(
         "Saved debug_warped.jpg",
-        corrected.shape
+        enhanced.shape
     )
