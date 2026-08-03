@@ -84,7 +84,7 @@ def process_receipts():
                 debug=True
             )
                 
-            
+            #
             # ----------------------------
             # OCR selection
             # ----------------------------
@@ -94,26 +94,40 @@ def process_receipts():
 
             for img_name, img in variants:
                 for psm in [4,11]:
+
                     print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
-                    if img.shape[1] > 1800:
-                        img = cv2.resize(
-                        img,
-                        None,
-                        fx=0.75,
-                        fy=0.75,
-                        interpolation=cv2.INTER_AREA
+
+                    ocr_img = img
+
+                    if ocr_img.shape[1] > 1800:
+                        ocr_img = cv2.resize(
+                            ocr_img,
+                            None,
+                            fx=0.75,
+                            fy=0.75,
+                            interpolation=cv2.INTER_AREA
+                        )
+
+                    future = executor.submit(
+                        pytesseract.image_to_string,
+                        ocr_img,
+                        config=f"--oem 3 --psm {psm}"
                     )
-                    future = executor.submit(pytesseract.image_to_string, img, config=f"--oem 3 --psm {psm}")
+
                     try:
                         text = future.result(timeout=TIMEOUT_LIMIT)
                         text = text.replace("$ ", "$").replace(" ,", ",").replace(" .", ".")
                         score = score_ocr(text)
+
                     except TimeoutError:
                         print(f"\n[Timeout skipped] {img_name} hung on PSM {psm}")
                         text, score = "", -1
+
                     except Exception as e:
                         print(f"\n[Error skipped] {img_name} failed on PSM {psm}: {e}")
                         text, score = "", -1
+
+
                     print(
                         "OCR result:",
                         img_name,
@@ -124,41 +138,52 @@ def process_receipts():
                         "score:",
                         score
                     )
-                    results.append((score, text, img, img_name, psm))
+
+                    results.append(
+                        (score, text, img, img_name, psm)
+                    )
+
 
                     if score >= GOOD_SCORE:
-                        print(f"\nGood OCR score ({score}) reached. Skipping remaining OCR attempts.")
+                        print(
+                            f"\nGood OCR score ({score}) reached. Skipping remaining OCR attempts."
+                        )
                         found_good = True
                         break
+
                 if found_good:
                     break
 
-                if len(best_text.strip()) < 10:
-                    print("Very poor OCR result, saving for debugging.")
-    
-                    with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-                        f.write(f"\n\n--- {filename} FAILED OCR ---\n")
-                        f.write(best_text)
-    
+
+            # ============================
+            # PICK BEST OCR RESULT
+            # ============================
+
+            if not results:
+                print("No OCR results produced.")
+                continue
+
+
             best_score, best_text, processed_img, best_method, best_psm = max(
                 results,
                 key=lambda x: x[0]
             )
-            print(f"\n\033[92mSelected preprocessing:\033[0m \033[1;92m {best_method}\033[0m")
-            print(f"\033[92mSelected PSM:\033[0m \033[1;92m {best_psm}\033[0m")
-            print(f"\033[92mSelected OCR score:\033[0m \033[1;92m {best_score}\033[0m")
+
+
+            print(f"\nSelected preprocessing: {best_method}")
+            print(f"Selected PSM: {best_psm}")
+            print(f"Selected OCR score: {best_score}")
+
 
             if len(best_text.strip()) < 10:
-                print("Poor OCR result, skipping.")
+
+                print("Very poor OCR result, saving for debugging.")
+
+                with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+                    f.write(f"\n\n--- {filename} FAILED OCR ---\n")
+                    f.write(best_text)
+        
                 continue
-
-            lines = [line.strip() for line in best_text.splitlines() if line.strip()]
-
-            with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-                f.write(f"\n\n--- {filename} ---\n")
-                f.write(f"Method: {best_method}, PSM: {best_psm}\n\n")
-                for line in lines:
-                    f.write(line + "\n")
             
             # detect store
             store = "Unknown"
