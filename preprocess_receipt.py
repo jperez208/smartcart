@@ -120,7 +120,14 @@ def detect_receipt(image):
         (5,5),
         0
     )
-
+    thresh = cv2.adaptiveThreshold(
+        blur,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        31,
+        10
+    )
     edges = cv2.Canny(
         blur,
         30,
@@ -188,7 +195,7 @@ def detect_receipt(image):
 
         approx = cv2.approxPolyDP(
             contour,
-            0.03 * perimeter,
+            0.015 * perimeter,
             True
         )
 
@@ -211,9 +218,9 @@ def detect_receipt(image):
             # and should occupy significant area
 
             if (
-                area_ratio > 0.25
-                and h > w
-                and aspect < 1.0
+                h > w
+                and aspect < 0.9
+                and h > image.shape[0] * 0.35
             ):
 
                 print("Receipt candidate:")
