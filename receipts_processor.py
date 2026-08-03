@@ -176,19 +176,22 @@ def process_receipts():
 
 
             if len(best_text.strip()) < 10:
-
-                print("Very poor OCR result, saving for debugging.")
-
-                with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
-                    f.write(f"\n\n--- {filename} FAILED OCR ---\n")
-                    f.write(best_text)
-        
+                print("Poor OCR result, skipping.")
                 continue
-                lines = [
-                    line.strip()
-                    for line in best_text.splitlines()
-                    if line.strip()
-                    ]
+
+            lines = [
+                line.strip()
+                for line in best_text.splitlines()
+                if line.strip()
+            ]
+
+            print("OCR lines:", len(lines))
+
+            with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
+                f.write(f"\n\n--- {filename} ---\n")
+                f.write(f"Method: {best_method}, PSM: {best_psm}\n\n")
+                for line in lines:
+                f.write(line + "\n")
             
             # detect store
             store = "Unknown"
