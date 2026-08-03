@@ -650,12 +650,12 @@ def generate_variants(image):
     )
 
 
-   ''' variants.append(
-        (
-           "AdaptiveInv",
-           adaptive_inv
-        )
-    )'''
+   # variants.append(
+   #     (
+    #       "AdaptiveInv",
+    #       adaptive_inv
+    #    )
+   # )
 
 
     # -------------------------
@@ -675,12 +675,12 @@ def generate_variants(image):
     )
 
 
-'''    variants.append(
-        (
-            "Morph",
-            morph
-        )
-    )'''
+#    variants.append(
+#        (
+#            "Morph",
+ #           morph
+ #       )
+  #  )
 
 
     return variants
