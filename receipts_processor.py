@@ -57,7 +57,7 @@ def process_receipts():
 
     conn = get_connection()
     cur = conn.cursor()
-    TIMEOUT_LIMIT = 90.0
+    TIMEOUT_LIMIT = 30.0
 
     # Share one thread pool across all items to reduce execution overhead
     with ThreadPoolExecutor(max_workers=1) as executor:
