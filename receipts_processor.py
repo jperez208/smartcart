@@ -5,6 +5,7 @@ import re
 import hashlib
 import numpy as np
 from preprocess_receipt import preprocess_receipt
+from save_list import save_list
 from utils import *
 from db import get_connection
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
@@ -206,6 +207,7 @@ def process_receipts():
 
                 if found:
                     break
+                save_list.append_list()
         
             # detect date
             receipt_date = ""
