@@ -5,7 +5,7 @@ import re
 import hashlib
 import numpy as np
 from preprocess_receipt import preprocess_receipt
-from save_list import save_list
+from save_list import *
 from utils import *
 from db import get_connection
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
