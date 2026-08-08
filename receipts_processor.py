@@ -207,7 +207,7 @@ def process_receipts():
 
                 if found:
                     break
-                append_list()
+                append_list(lines)
         
             # detect date
             receipt_date = ""
