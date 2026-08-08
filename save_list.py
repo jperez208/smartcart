@@ -10,6 +10,3 @@ def append_list():
               f.write(f"Method: {best_method}, PSM: {best_psm}\n\n")
               for line in lines:
                   f.write(line + "\n")
-
-if __name__=="__main__":
-  save_list()
