@@ -207,7 +207,6 @@ def process_receipts():
 
                 if found:
                     break
-            append_list(store)
         
             # detect date
             receipt_date = ""
@@ -217,7 +216,7 @@ def process_receipts():
                     receipt_date = m.group()
                     break
             print(f"Date: {receipt_date}")
-            append_list(receipt_date)
+            
             # ----------------------------
             # Store Address Detection
             # ----------------------------
@@ -245,7 +244,7 @@ def process_receipts():
             if city_state:
                 full_address += ", " + city_state
             print(f"Address: {full_address}")
-            append_list(full_address)
+            
             # items
             for line in lines:
                 match = price_pattern.search(line)
@@ -275,7 +274,7 @@ def process_receipts():
                 """, (store, full_address, receipt_date, raw_name, clean, price))
 
                 print(f"{clean} -> ${price:.2f}")
-                append_list(clean, price)
+            append_list(store, receipt_date, full_address, items)
             mark_processed(cur, filename, path)
             conn.commit()
 
