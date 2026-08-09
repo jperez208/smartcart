@@ -19,7 +19,13 @@ RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
 DEBUG_OCR_FILE = os.path.join(BASE_DIR, "debug_ocr.txt")
 
 price_pattern = re.compile(r"(.+?)\s+\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))", re.IGNORECASE)
-date_pattern = re.compile(r'\b\d{1,2}[\s\-/.]+\d{1,2}[\s\-/.]+\d{2,4}\b', re.IGNORECASE)
+date_pattern = re.compile(
+    r'\b(?:'
+    r'(?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[12]\d|3[01])[-/.](?:\d{2}|\d{4})'
+    r'|'
+    r'(?:0?[1-9]|[12]\d|3[01])[-/.](?:0?[1-9]|1[0-2])[-/.](?:\d{2}|\d{4})'
+    r')\b'
+)
 
 def get_file_hash(filepath):
     hasher = hashlib.sha256()
@@ -224,9 +230,15 @@ def process_receipts():
             city_state = ""
             full_address = ""
 
-            address_pattern = re.compile(r'^\d{1,6}\s+[A-Z0-9 .#-]+$', re.IGNORECASE)
-            city_pattern = re.compile(r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$', re.IGNORECASE)
+            address_pattern = re.compile(
+                    r'^\d{1,6}\s+.+(?:,\s*[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?)?$',
+                    re.IGNORECASE
+                )
 
+            city_pattern = re.compile(
+                r'^[A-Z .\'-]+,\s*[A-Z]{2}\s+\d{5}(?:-\d{4})?$',
+                re.IGNORECASE
+            )
             for i, line in enumerate(lines[:20]):
                 if address_pattern.match(line):
                     if any(x in line.upper() for x in ["ST#", "OP#", "TR", "TEL", "PHONE"]):
