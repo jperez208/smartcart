@@ -246,6 +246,7 @@ def process_receipts():
             print(f"Address: {full_address}")
             
             # items
+            items = []
             for line in lines:
                 match = price_pattern.search(line)
                 if not match:
@@ -266,6 +267,7 @@ def process_receipts():
 
                 if len(clean) < 3:
                     continue
+                items.append((clean, price))
 
                 cur.execute("""
                 INSERT OR IGNORE INTO items
