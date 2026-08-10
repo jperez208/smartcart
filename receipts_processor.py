@@ -1,4 +1,4 @@
-import os
+    import os
 import cv2
 import pytesseract
 import re
@@ -99,13 +99,15 @@ def process_receipts():
             # OCR selection
             # ----------------------------
             results = []
-            GOOD_SCORE = 60
-            found_good = False
 
             for img_name, img in variants:
-                for psm in [4,11]:
+                for psm in [4, 11]:
 
-                    print(f"\rMethod: {img_name} | PSM mode: {psm} ", end="", flush=True)
+                    print(
+                        f"\rMethod: {img_name} | PSM mode: {psm}",
+                        end="",
+                        flush=True
+                    )
 
                     ocr_img = img
 
@@ -126,17 +128,31 @@ def process_receipts():
 
                     try:
                         text = future.result(timeout=TIMEOUT_LIMIT)
-                        text = text.replace("$ ", "$").replace(" ,", ",").replace(" .", ".")
+
+                        text = (
+                            text
+                            .replace("$ ", "$")
+                            .replace(" ,", ",")
+                            .replace(" .", ".")
+                        )
+
                         score = score_ocr(text)
 
                     except TimeoutError:
-                        print(f"\n[Timeout skipped] {img_name} hung on PSM {psm}")
-                        text, score = "", -1
+                        print(
+                            f"\n[Timeout skipped] "
+                            f"{img_name} hung on PSM {psm}"
+                        )
+                        text = ""
+                        score = -100
 
                     except Exception as e:
-                        print(f"\n[Error skipped] {img_name} failed on PSM {psm}: {e}")
-                        text, score = "", -1
-
+                        print(
+                            f"\n[Error skipped] "
+                            f"{img_name} failed on PSM {psm}: {e}"
+                        )
+                        text = ""
+                        score = -100
 
                     print(
                         "OCR result:",
