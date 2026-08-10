@@ -18,13 +18,16 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RECEIPT_FOLDER = os.path.join(BASE_DIR, "receipts")
 DEBUG_OCR_FILE = os.path.join(BASE_DIR, "debug_ocr.txt")
 
-price_pattern = re.compile(r"(.+?)\s+\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))", re.IGNORECASE)
+price_pattern = re.compile(
+    r"(.+?)\s+\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))\s*$",
+    re.IGNORECASE
+)
 date_pattern = re.compile(
-    r'\b(?:'
-    r'(?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[12]\d|3[01])[-/.](?:\d{2}|\d{4})'
-    r'|'
-    r'(?:0?[1-9]|[12]\d|3[01])[-/.](?:0?[1-9]|1[0-2])[-/.](?:\d{2}|\d{4})'
-    r')\b'
+    r"\b(?:"
+    r"(?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[12]\d|3[01])[-/.](?:\d{2}|\d{4})"
+    r"|"
+    r"(?:0?[1-9]|[12]\d|3[01])[-/.](?:0?[1-9]|1[0-2])[-/.](?:\d{2}|\d{4})"
+    r")\b"
 )
 
 def get_file_hash(filepath):
