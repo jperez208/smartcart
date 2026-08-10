@@ -154,15 +154,15 @@ def process_receipts():
                     )
 
 
-                    if score >= GOOD_SCORE:
-                        print(
-                            f"\nGood OCR score ({score}) reached. Skipping remaining OCR attempts."
-                        )
-                        found_good = True
-                        break
+                   # if score >= GOOD_SCORE:
+                   #     print(
+                   #         f"\nGood OCR score ({score}) reached. Skipping remaining OCR attempts."
+                    #    )
+                    #    found_good = True
+                    #    break
 
-                if found_good:
-                    break
+               # if found_good:
+               #     break
 
 
             # ============================
