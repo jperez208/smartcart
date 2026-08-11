@@ -1,27 +1,27 @@
 import re
 
 IGNORE_WORDS = [
-    "SUBTOTAL","SUB TOTAL","TOTAL","TAX","CHANGE","CASH",
-    "ACCOUNT","APPROVAL","REFERENCE","REF","TRANS","TRANSACTION",
-    "VALIDATION","TERMINAL","PAYMENT","SERVICE","VISA",
-    "MASTERCARD","DEBIT","CREDIT","THANK"
+    "SUBTOTAL", "SUB TOTAL", "TOTAL", "TAX", "CHANGE", "CASH",
+    "ACCOUNT", "APPROVAL", "REFERENCE", "TRANS", "TRANSACTION",
+    "VALIDATION", "TERMINAL", "PAYMENT", "SERVICE", "VISA",
+    "MASTERCARD", "DEBIT", "CREDIT", "THANK",
 ]
+
+# Short tokens that must match as whole words (avoid "REF" inside other words)
+IGNORE_WHOLE = {"REF"}
 
 STORE_NAMES = {
     "WALMART": "Walmart",
     "WAL MART": "Walmart",
     "WALMART STORE": "Walmart",
-
-    "WALMART": "Walmart",
     "COSTCO": "Costco",
     "WINCO": "WinCo Foods",
     "SAFEWAY": "Safeway",
     "TARGET": "Target",
-
     "DOLLAR TREE": "Dollar Tree",
     "DOLLARTREE": "Dollar Tree",
-    "DOLLAR  TREE": "Dollar Tree"
 }
+
 
 def clean_item_name(name):
     name = name.upper()
@@ -29,37 +29,41 @@ def clean_item_name(name):
     name = re.sub(r"\s+", " ", name)
     return name.strip()
 
+
 def ignored(line):
     upper = line.upper()
-    return any(word in upper for word in IGNORE_WORDS)
+    if any(word in upper for word in IGNORE_WORDS):
+        return True
+    tokens = set(re.findall(r"[A-Z]+", upper))
+    return bool(tokens & IGNORE_WHOLE)
+
 
 def normalize_price(value):
-    return value.replace(",", ".").replace(" ", "")
+    """Normalize OCR price strings to a float-friendly form."""
+    value = value.strip().replace(" ", "").replace("$", "")
+    # US thousands: 1,299.99 -> 1299.99
+    if re.match(r"^\d{1,3}(,\d{3})+(\.\d{2})?$", value):
+        return value.replace(",", "")
+    # European-style: 1.299,99 -> 1299.99
+    if re.match(r"^\d{1,3}(\.\d{3})+(,\d{2})$", value):
+        return value.replace(".", "").replace(",", ".")
+    # Bare comma decimals: 1,99 -> 1.99
+    if re.match(r"^\d+,\d{2}$", value):
+        return value.replace(",", ".")
+    return value
+
 
 def score_ocr(text):
-
+    """Tie-breaker only. Item-line count should be the primary ranking key."""
     if not text:
         return -999
 
     score = 0
-
     score += len(text) // 20
-
-    score += len(
-        re.findall(r'\d+\.\d{2}', text)
-    ) * 15
-
-    words = [
-        "TOTAL",
-        "TAX",
-        "SUBTOTAL",
-        "PRICE",
-        "ITEM"
-    ]
+    score += len(re.findall(r"\d+\.\d{2}", text)) * 15
 
     upper = text.upper()
-
-    for word in words:
+    for word in ("TOTAL", "TAX", "SUBTOTAL", "PRICE", "ITEM"):
         if word in upper:
             score += 20
 
