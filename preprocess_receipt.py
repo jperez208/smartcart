@@ -7,7 +7,8 @@ import os
 # Configuration
 # =====================================================
 
-TARGET_WIDTH = 1200
+TARGET_WIDTH = 1600
+MAX_WIDTH_BEFORE_DOWNSCALE = 2200
 
 DEBUG_DIR = "debug_preprocess"
 
@@ -275,27 +276,23 @@ def perspective_correct(image):
 def resize_receipt(image):
     """
     Normalize receipt size for OCR.
+    Only downscale huge images; leave smaller ones alone
+    (upscaling for tiny text is handled in receipts_processor).
     """
-
     height, width = image.shape[:2]
 
-    if width == TARGET_WIDTH:
+    if width <= MAX_WIDTH_BEFORE_DOWNSCALE:
         return image
 
-
     scale = TARGET_WIDTH / width
-
-
     resized = cv2.resize(
         image,
         None,
         fx=scale,
         fy=scale,
-        interpolation=cv2.INTER_CUBIC
+        interpolation=cv2.INTER_AREA,
     )
-
     return resized
-
 
 
 def enhance_receipt(image):
