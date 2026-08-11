@@ -19,11 +19,12 @@ OCR_WIDTH = 1200
 FALLBACK_VARIANT_NAMES = {"Gray", "CLAHE", "Otsu"}
 
 price_pattern = re.compile(
-    r"(.+?)\s+\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))\s*$",
+    r"(.+?)\s+\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))"
+    r"[^\d]*$",
     re.IGNORECASE,
 )
 price_only_pattern = re.compile(
-    r"^\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))\s*$"
+    r"^\$?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2}))\s*[A-Za-z]*\s*$"
 )
 date_pattern = re.compile(
     r"\b(?:"
@@ -33,6 +34,84 @@ date_pattern = re.compile(
     r")\b"
 )
 
+def normalize_ocr_line(line):
+    line = (
+        line.replace("|", " ")
+        .replace("{", " ")
+        .replace("}", " ")
+        .replace("«", " ")
+        .replace("»", " ")
+        .replace("©", " ")
+    )
+    # "2. 89" / "3. 18" -> "2.89" / "3.18"
+    line = re.sub(r"(\d)\.\s+(\d{2})", r"\1.\2", line)
+    line = re.sub(r"\s+", " ", line).strip()
+    return line
+
+
+def count_item_matches(text):
+    hits = 0
+    lines = [
+        normalize_ocr_line(ln)
+        for ln in text.splitlines()
+        if ln.strip()
+    ]
+    for i, line in enumerate(lines):
+        if price_pattern.search(line):
+            hits += 1
+            continue
+        if price_only_pattern.match(line) and i > 0:
+            prev = lines[i - 1]
+            if not price_pattern.search(prev) and not price_only_pattern.match(prev):
+                if len(clean_item_name(prev)) >= 3 and not ignored(prev):
+                    hits += 1
+    return hits
+
+
+def extract_items_from_lines(lines):
+    items = []
+    i = 0
+    while i < len(lines):
+        line = normalize_ocr_line(lines[i])
+        match = price_pattern.search(line)
+
+        if match:
+            raw_name = match.group(1).strip()
+            price_raw = match.group(2)
+        elif price_only_pattern.match(line) and i > 0:
+            raw_name = normalize_ocr_line(lines[i - 1])
+            price_raw = price_only_pattern.match(line).group(1)
+            if price_pattern.search(raw_name) or price_only_pattern.match(raw_name):
+                i += 1
+                continue
+        else:
+            i += 1
+            continue
+
+        if ignored(raw_name):
+            i += 1
+            continue
+
+        try:
+            price = float(normalize_price(price_raw))
+        except (ValueError, TypeError):
+            i += 1
+            continue
+
+        # Skip obvious OCR garbage (e.g. soda as $92.38)
+        if price <= 0 or price > 50:
+            i += 1
+            continue
+
+        clean = clean_item_name(raw_name)
+        if len(clean) < 3:
+            i += 1
+            continue
+
+        items.append((raw_name, clean, price))
+        i += 1
+
+    return items
 
 def get_file_hash(filepath):
     hasher = hashlib.sha256()
@@ -255,10 +334,10 @@ def process_receipts():
             continue
 
         lines = [
-            line.strip()
-            for line in best_text.splitlines()
-            if line.strip()
-        ]
+                normalize_ocr_line(line)
+                for line in best_text.splitlines()
+                    if line.strip()
+            ]
 
         with open(DEBUG_OCR_FILE, "a", encoding="utf-8") as f:
             f.write(f"\n\n--- {filename} ---\n")
