@@ -95,7 +95,7 @@ def extract_items_from_lines(lines):
         # Skip weight / multipack unit-price lines
         upper_raw = raw_name.upper()
         if re.search(
-            r"(\d+\s*@|/ ?I[BL]|/ ?LB|\bEACH\b|\bSAVINGS\b)",
+            r"(\d+\s*@|/ ?I[BL]|/ ?LB|\bI[BL]\b|\bLB\b|\bEACH\b|\bSAVINGS\b)",
             upper_raw,
         ):
             i += 1
