@@ -220,7 +220,22 @@ def identify_item(cur, raw_name, clean_name, price, store=None):
         "confidence": 0.0,
         "match_method": "unknown",
     }
+def extract_identifier(text):
+    """
+    Extract a UPC/SKU-like identifier from OCR text.
+    """
 
+    if not text:
+        return None
+
+    # Prefer long UPC-like numbers.
+    matches = re.findall(r"\b\d{8,14}\b", text)
+
+    if matches:
+        matches.sort(key=len, reverse=True)
+        return matches[0]
+
+    return None
 def process_receipts():
     print("\nProcessing newly uploaded receipts.")
     print("\nPlease wait...")
