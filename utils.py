@@ -5,6 +5,7 @@ IGNORE_WORDS = [
     "ACCOUNT", "APPROVAL", "REFERENCE", "TRANS", "TRANSACTION",
     "VALIDATION", "TERMINAL", "PAYMENT", "SERVICE", "VISA",
     "MASTERCARD", "DEBIT", "CREDIT", "THANK",
+    "AMOUNT", "PURCHASE", "BALANCE", "TENDERS", "SUMMARY",
 ]
 
 # Short tokens that must match as whole words (avoid "REF" inside other words)
