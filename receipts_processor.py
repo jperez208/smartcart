@@ -92,19 +92,33 @@ def extract_items_from_lines(lines):
             i += 1
             continue
 
+        # Skip weight / multipack unit-price lines
+        upper_raw = raw_name.upper()
+        if re.search(
+            r"(\d+\s*@|/ ?I[BL]|/ ?LB|\bEACH\b|\bSAVINGS\b)",
+            upper_raw,
+        ):
+            i += 1
+            continue
+
         try:
             price = float(normalize_price(price_raw))
         except (ValueError, TypeError):
             i += 1
             continue
 
-        # Skip obvious OCR garbage (e.g. soda as $92.38)
+        # Skip obvious OCR garbage prices
         if price <= 0 or price > 50:
             i += 1
             continue
 
         clean = clean_item_name(raw_name)
-        if len(clean) < 3:
+
+        # Too short / mostly digits (e.g. "2 0", barcodes-only)
+        if len(clean) < 4:
+            i += 1
+            continue
+        if len(re.sub(r"\d", "", clean)) < 3:
             i += 1
             continue
 
