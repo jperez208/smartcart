@@ -4,7 +4,7 @@ import pytesseract
 import re
 import hashlib
 from preprocess_receipt import preprocess_receipt
-from product_matcher import indentify_item
+from product_matcher import identify_item
 from save_list import *
 from utils import *
 from db import get_connection
@@ -364,7 +364,57 @@ def process_receipts():
 
         parsed = extract_items_from_lines(lines)
         #lines 367-399 sku/upc handling
+        parsed = extract_items_from_lines(lines)
+
+        items = []
+        
         for raw_name, clean, price in parsed:
+        
+            # ---------------------------------------------------------
+            # Product identification
+            # ---------------------------------------------------------
+            match = identify_item(
+                cur,
+                raw_name,
+                clean,
+                price,
+            )
+        
+            identifier = match.get("identifier")
+            identifier_type = match.get("identifier_type")
+            canonical_name = match.get("canonical_name")
+            confidence = match.get("confidence", 0.0)
+        
+            print(
+                f"{clean} -> ${price:.2f} | "
+                f"ID: {identifier or '-'} "
+                f"({identifier_type or '-'}) | "
+                f"Match: {canonical_name or 'UNKNOWN'} | "
+                f"Confidence: {confidence:.2f}"
+            )
+        
+            # ---------------------------------------------------------
+            # Store receipt item
+            # ---------------------------------------------------------
+            items.append((clean, price))
+        
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO items
+                (store, full_address, date, raw_name, clean_name, price)
+                VALUES (?,?,?,?,?,?)
+                """,
+                (
+                    store,
+                    full_address,
+                    receipt_date,
+                    raw_name,
+                    clean,
+                    price,
+                ),
+            )
+            #old working code
+        '''for raw_name, clean, price in parsed:
         
             match = identify_item(
                 cur,
@@ -381,7 +431,7 @@ def process_receipts():
             )
         
             items.append((clean, price))
-        
+'''
             cur.execute(
                 """
                 INSERT OR IGNORE INTO items
