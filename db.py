@@ -33,6 +33,34 @@ def init_db():
             processed_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+    #Stores SKU/UPC data
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS products(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            canonical_name TEXT NOT NULL,
+            brand TEXT,
+            size TEXT,
+            upc TEXT,
+            sku TEXT,
+            plu TEXT
+        )
+        """)
+
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_products_upc
+        ON products(upc)
+        WHERE upc IS NOT NULL
+        """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_products_sku
+        ON products(sku)
+        """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_products_plu
+        ON products(plu)
+        """)
     
     conn.commit()
     conn.close()
