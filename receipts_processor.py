@@ -166,7 +166,7 @@ def resize_for_ocr(img, target_width=OCR_WIDTH):
     return cv2.resize(img, None, fx=scale, fy=scale, interpolation=interp)
 
 
-def count_item_matches(text):
+'''def count_item_matches(text):
     hits = 0
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     for i, line in enumerate(lines):
@@ -179,7 +179,7 @@ def count_item_matches(text):
                 if len(clean_item_name(prev)) >= 3 and not ignored(prev):
                     hits += 1
     return hits
-
+'''
 
 def prepare_simple_image(image):
     """Light gray image — similar to the old single-file approach."""
@@ -222,47 +222,6 @@ def ocr_attempt(img_name, img, psm):
         f"chars:{len(text)} items:{items} score:{score}"
     )
     return (items, score, text, img_name, psm)
-
-
-def extract_items_from_lines(lines):
-    items = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        match = price_pattern.search(line)
-        if match:
-            raw_name = match.group(1).strip()
-            price_raw = match.group(2)
-        elif price_only_pattern.match(line) and i > 0:
-            raw_name = lines[i - 1]
-            price_raw = price_only_pattern.match(line).group(1)
-            if price_pattern.search(raw_name) or price_only_pattern.match(raw_name):
-                i += 1
-                continue
-        else:
-            i += 1
-            continue
-
-        if ignored(raw_name):
-            i += 1
-            continue
-
-        try:
-            price = float(normalize_price(price_raw))
-        except (ValueError, TypeError):
-            i += 1
-            continue
-
-        clean = clean_item_name(raw_name)
-        if len(clean) < 3:
-            i += 1
-            continue
-
-        items.append((raw_name, clean, price))
-        i += 1
-
-    return items
-
 
 def process_receipts():
     print("\nProcessing newly uploaded receipts.")
