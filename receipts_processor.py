@@ -208,6 +208,19 @@ def ocr_attempt(img_name, img, psm):
     )
     return (items, score, text, img_name, psm)
 
+#def identify_item is placeholder for Upc/sku values.  delete when done
+def identify_item(cur, raw_name, clean_name, price, store=None):
+    return {
+        "id": None,
+        "identifier": extract_identifier(raw_name),
+        "identifier_type": "UPC" if extract_identifier(raw_name) else None,
+        "canonical_name": None,
+        "brand": None,
+        "store": store,
+        "confidence": 0.0,
+        "match_method": "unknown",
+    }
+
 def process_receipts():
     print("\nProcessing newly uploaded receipts.")
     print("\nPlease wait...")
