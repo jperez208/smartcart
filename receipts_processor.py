@@ -445,21 +445,21 @@ def process_receipts():
         
             items.append((clean, price))
 '''
-            cur.execute(
-                """
-                INSERT OR IGNORE INTO items
-                (store, full_address, date, raw_name, clean_name, price)
-                VALUES (?,?,?,?,?,?)
-                """,
-                (
-                    store,
-                    full_address,
-                    receipt_date,
-                    raw_name,
-                    clean,
-                    price,
-                ),
-            )
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO items
+            (store, full_address, date, raw_name, clean_name, price)
+            VALUES (?,?,?,?,?,?)
+            """,
+            (
+                store,
+                full_address,
+                receipt_date,
+                raw_name,
+                clean,
+                price,
+            ),
+        )
         
         items = []
         for raw_name, clean, price in parsed:
