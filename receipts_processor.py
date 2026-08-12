@@ -4,6 +4,7 @@ import pytesseract
 import re
 import hashlib
 from preprocess_receipt import preprocess_receipt
+from product_matcher import indentify_item
 from save_list import *
 from utils import *
 from db import get_connection
@@ -164,22 +165,6 @@ def resize_for_ocr(img, target_width=OCR_WIDTH):
     scale = target_width / float(w)
     interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
     return cv2.resize(img, None, fx=scale, fy=scale, interpolation=interp)
-
-
-'''def count_item_matches(text):
-    hits = 0
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    for i, line in enumerate(lines):
-        if price_pattern.search(line):
-            hits += 1
-            continue
-        if price_only_pattern.match(line) and i > 0:
-            prev = lines[i - 1]
-            if not price_pattern.search(prev) and not price_only_pattern.match(prev):
-                if len(clean_item_name(prev)) >= 3 and not ignored(prev):
-                    hits += 1
-    return hits
-'''
 
 def prepare_simple_image(image):
     """Light gray image — similar to the old single-file approach."""
@@ -378,6 +363,41 @@ def process_receipts():
         print(f"Address: {full_address}")
 
         parsed = extract_items_from_lines(lines)
+        #lines 367-399 sku/upc handling
+        for raw_name, clean, price in parsed:
+        
+            match = identify_item(
+                cur,
+                raw_name,
+                clean,
+                price,
+            )
+        
+            print(
+                f"{clean} -> ${price:.2f} | "
+                f"ID: {match['identifier']} | "
+                f"Match: {match['canonical_name']} | "
+                f"Confidence: {match['confidence']}"
+            )
+        
+            items.append((clean, price))
+        
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO items
+                (store, full_address, date, raw_name, clean_name, price)
+                VALUES (?,?,?,?,?,?)
+                """,
+                (
+                    store,
+                    full_address,
+                    receipt_date,
+                    raw_name,
+                    clean,
+                    price,
+                ),
+            )
+        
         items = []
         for raw_name, clean, price in parsed:
             items.append((clean, price))
