@@ -1098,4 +1098,3 @@ def process_receipts():
 
 if __name__ == "__main__":
     process_receipts()
-```
