@@ -239,7 +239,6 @@ def import_item(
     Import one receipts.db item.
 
     Returns:
-
         observation_id
         observation_created
         identifiers_created
@@ -250,6 +249,13 @@ def import_item(
         item,
     )
 
+    if not created:
+        return (
+            observation_id,
+            False,
+            0,
+        )
+
     identifiers_created = import_identifiers(
         master_cur,
         observation_id,
@@ -259,7 +265,7 @@ def import_item(
 
     return (
         observation_id,
-        created,
+        True,
         identifiers_created,
     )
 
