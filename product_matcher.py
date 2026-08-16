@@ -680,4 +680,3 @@ if __name__ == "__main__":
             f"{observation['identifier'] or '-'} "
             f"({observation['identifier_type'] or '-'})"
         )
-```
