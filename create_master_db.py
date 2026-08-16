@@ -28,19 +28,29 @@ def create_master_db():
     # Individual observations imported from receipts.db
     # ---------------------------------------------------------
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS product_observations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            receipt_item_id INTEGER NOT NULL,
-            product_id INTEGER,
-            match_status TEXT NOT NULL DEFAULT 'unmatched',
-            confidence REAL,
-            created_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CREATE TABLE IF NOT EXISTS product_observations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-            FOREIGN KEY (product_id)
-                REFERENCES products(id)
+        receipt_item_id INTEGER NOT NULL,
+
+        raw_name TEXT,
+        clean_name TEXT,
+        price REAL,
+        store TEXT,
+        full_address TEXT,
+        date TEXT,
+
+        product_id INTEGER,
+
+        match_status TEXT NOT NULL DEFAULT 'unmatched',
+        confidence REAL,
+
+        created_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY (product_id)
+            REFERENCES products(id)
         )
     """)
-
     # ---------------------------------------------------------
     # Names observed for canonical products
     # ---------------------------------------------------------
