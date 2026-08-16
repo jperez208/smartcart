@@ -1,4 +1,4 @@
-```python
+
 # product_matcher.py
 #
 # SmartCart product information and normalization helpers.
