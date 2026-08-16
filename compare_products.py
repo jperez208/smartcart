@@ -1081,7 +1081,7 @@ def run_comparison():
             f"Total match evidence:      "
             f"{evidence_count}"
         )
-                print(
+        print(
             f"Master products:            "
             f"{product_count}"
         )
