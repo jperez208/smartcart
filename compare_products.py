@@ -572,6 +572,380 @@ def create_exact_identifier_matches(master_conn):
         evidence_created,
     )
 
+# ---------------------------------------------------------------------------
+# Create master products from strong exact-identifier groups
+# ---------------------------------------------------------------------------
+
+MASTER_IDENTIFIER_TYPES = {
+    "UPC",
+    "EAN",
+    "SKU",
+}
+
+
+def get_master_identifier_groups(master_conn):
+    """
+    Return observations grouped by strong identifiers.
+
+    PLU is intentionally excluded for now because PLUs can represent
+    generic products such as produce rather than a unique packaged product.
+    """
+
+    rows = get_identifier_observations(
+        master_conn
+    )
+
+    groups = {}
+
+    for row in rows:
+
+        interpreted_type = classify_identifier(
+            row["identifier_type"],
+            row["identifier_value"],
+        )
+
+        if interpreted_type not in MASTER_IDENTIFIER_TYPES:
+            continue
+
+        value = str(
+            row["identifier_value"]
+        ).strip()
+
+        key = (
+            interpreted_type,
+            value,
+        )
+
+        groups.setdefault(
+            key,
+            [],
+        ).append(row)
+
+    return groups
+
+
+def create_master_product(
+    cursor,
+    observations,
+):
+    """
+    Create one master product from a group of observations sharing
+    the same strong identifier.
+
+    The most common clean_name becomes the initial canonical name.
+    """
+
+    names = []
+
+    for observation in observations:
+
+        name = observation["clean_name"]
+
+        if name:
+            name = str(name).strip()
+
+            if name:
+                names.append(name)
+
+    if not names:
+        canonical_name = "Unknown product"
+    else:
+        counts = {}
+
+        for name in names:
+            counts[name] = (
+                counts.get(name, 0) + 1
+            )
+
+        canonical_name = max(
+            counts,
+            key=counts.get,
+        )
+
+    cursor.execute(
+        """
+        INSERT INTO products (
+            canonical_name,
+            status
+        )
+        VALUES (?, 'needs_review')
+        """,
+        (
+            canonical_name,
+        ),
+    )
+
+    return cursor.lastrowid
+
+
+def add_product_identifier(
+    cursor,
+    product_id,
+    identifier_type,
+    identifier_value,
+    confidence,
+):
+    """
+    Add the strong identifier to the master product.
+    """
+
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO identifiers (
+            product_id,
+            identifier_type,
+            identifier_value,
+            confidence
+        )
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            product_id,
+            identifier_type,
+            identifier_value,
+            confidence,
+        ),
+    )
+
+
+def add_product_name(
+    cursor,
+    product_id,
+    observed_name,
+):
+    """
+    Record an observed name associated with the master product.
+    """
+
+    if not observed_name:
+        return
+
+    observed_name = str(
+        observed_name
+    ).strip()
+
+    if not observed_name:
+        return
+
+    cursor.execute(
+        """
+        INSERT INTO product_names (
+            product_id,
+            observed_name,
+            normalized_name
+        )
+        VALUES (?, ?, ?)
+
+        ON CONFLICT (
+            product_id,
+            observed_name
+        )
+        DO UPDATE SET
+            occurrence_count =
+                occurrence_count + 1,
+            last_seen =
+                CURRENT_TIMESTAMP
+        """,
+        (
+            product_id,
+            observed_name,
+            observed_name.upper(),
+        ),
+    )
+
+
+def assign_observation_to_product(
+    cursor,
+    observation_id,
+    product_id,
+    confidence,
+):
+    """
+    Assign an observation to a master product.
+    """
+
+    cursor.execute(
+        """
+        UPDATE product_observations
+        SET
+            product_id = ?,
+            match_status = 'matched',
+            confidence = ?
+        WHERE id = ?
+          AND (
+              product_id IS NULL
+              OR product_id = ?
+          )
+        """,
+        (
+            product_id,
+            confidence,
+            observation_id,
+            product_id,
+        ),
+    )
+
+
+def build_master_products(
+    master_conn,
+):
+    """
+    Create master products from strong exact identifiers.
+
+    Only UPC, EAN, and SKU are used at this stage.
+
+    Existing assignments are preserved.
+    """
+
+    groups = get_master_identifier_groups(
+        master_conn
+    )
+
+    cursor = master_conn.cursor()
+
+    products_created = 0
+    observations_assigned = 0
+    identifiers_added = 0
+    names_added = 0
+
+    for (
+        identifier_type,
+        identifier_value,
+    ), observations in groups.items():
+
+        # A master product requires the identifier to have appeared
+        # on at least two observations.
+        if len(observations) < 2:
+            continue
+
+        # Find any existing product assignments in this group.
+        existing_products = set()
+
+        for observation in observations:
+
+            cursor.execute(
+                """
+                SELECT product_id
+                FROM product_observations
+                WHERE id = ?
+                """,
+                (
+                    observation["observation_id"],
+                ),
+            )
+
+            row = cursor.fetchone()
+
+            if row and row[0] is not None:
+                existing_products.add(
+                    row[0]
+                )
+
+        # If observations in the same exact-identifier group have already
+        # been assigned to different products, do not merge them automatically.
+        if len(existing_products) > 1:
+            continue
+
+        if existing_products:
+
+            product_id = next(
+                iter(existing_products)
+            )
+
+        else:
+
+            product_id = create_master_product(
+                cursor,
+                observations,
+            )
+
+            products_created += 1
+
+        # Add the strong identifier to the master product.
+        confidence_values = [
+            observation["confidence"]
+            for observation in observations
+            if observation["confidence"] is not None
+        ]
+
+        if confidence_values:
+            identifier_confidence = max(
+                confidence_values
+            )
+        else:
+            identifier_confidence = 1.0
+
+        before = cursor.rowcount
+
+        add_product_identifier(
+            cursor,
+            product_id,
+            identifier_type,
+            identifier_value,
+            identifier_confidence,
+        )
+
+        # sqlite rowcount tells us whether INSERT OR IGNORE inserted.
+        if cursor.rowcount:
+            identifiers_added += 1
+
+        # Assign observations and record their names.
+        for observation in observations:
+
+            observation_id = (
+                observation["observation_id"]
+            )
+
+            cursor.execute(
+                """
+                SELECT product_id
+                FROM product_observations
+                WHERE id = ?
+                """,
+                (
+                    observation_id,
+                ),
+            )
+
+            current = cursor.fetchone()
+
+            if current and current[0] is not None:
+                if current[0] != product_id:
+                    continue
+
+                # Already assigned.
+                add_product_name(
+                    cursor,
+                    product_id,
+                    observation["clean_name"],
+                )
+
+                continue
+
+            assign_observation_to_product(
+                cursor,
+                observation_id,
+                product_id,
+                identifier_confidence,
+            )
+
+            if cursor.rowcount:
+                observations_assigned += 1
+
+            add_product_name(
+                cursor,
+                product_id,
+                observation["clean_name"],
+            )
+
+            names_added += 1
+
+    return (
+        products_created,
+        observations_assigned,
+        identifiers_added,
+        names_added,
+    )
 
 # ---------------------------------------------------------------------------
 # Main comparison pass
@@ -605,6 +979,15 @@ def run_comparison():
             matches_created,
             evidence_created,
         ) = create_exact_identifier_matches(
+            master_conn
+        )
+
+        (
+            products_created,
+            observations_assigned,
+            identifiers_added,
+            names_added,
+        ) = build_master_products(
             master_conn
         )
 
@@ -698,16 +1081,43 @@ def run_comparison():
             f"Total match evidence:      "
             f"{evidence_count}"
         )
-        print(
+                print(
             f"Master products:            "
             f"{product_count}"
         )
-        print()
         print(
-            "No products were created."
+            f"New master products:        "
+            f"{products_created}"
         )
         print(
-            "No observations were assigned."
+            f"Observations assigned:      "
+            f"{observations_assigned}"
+        )
+        print(
+            f"Identifiers added:          "
+            f"{identifiers_added}"
+        )
+        print(
+            f"Product names added:        "
+            f"{names_added}"
+        )
+        print()
+
+        if products_created:
+            print(
+                "Strong exact-identifier products "
+                "were created."
+            )
+        else:
+            print(
+                "No new master products were created."
+            )
+
+        print(
+            "Fuzzy name matching is still disabled."
+        )
+        print(
+            "PLU-based master grouping is still disabled."
         )
 
     except Exception:
