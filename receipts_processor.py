@@ -39,13 +39,10 @@ DEBUG_OCR_FILE = os.path.join(
 # OCR settings
 # ---------------------------------------------------------------------------
 
-# Prefer finishing OCR over running many expensive attempts.
 MIN_GOOD_ITEMS = 3
 
-# Keep OCR images small enough for the Celeron.
 OCR_WIDTH = 1200
 
-# Only use these preprocessing variants as fallbacks.
 FALLBACK_VARIANT_NAMES = {
     "Gray",
     "CLAHE",
@@ -83,8 +80,6 @@ date_pattern = re.compile(
 def normalize_ocr_line(line):
     """
     Clean obvious OCR formatting artifacts.
-
-    This does not attempt to correct product names.
     """
 
     line = (
@@ -97,14 +92,6 @@ def normalize_ocr_line(line):
         .replace("©", " ")
     )
 
-    # Convert:
-    #
-    #   2. 89
-    #
-    # into:
-    #
-    #   2.89
-    #
     line = re.sub(
         r"(\d)\.\s+(\d{2})",
         r"\1.\2",
@@ -127,8 +114,6 @@ def normalize_ocr_line(line):
 def count_item_matches(text):
     """
     Estimate how many receipt items OCR found.
-
-    Used to decide whether fallback OCR should run.
     """
 
     hits = 0
@@ -149,12 +134,14 @@ def count_item_matches(text):
             price_only_pattern.match(line)
             and i > 0
         ):
+
             prev = lines[i - 1]
 
             if (
                 not price_pattern.search(prev)
                 and not price_only_pattern.match(prev)
             ):
+
                 if (
                     len(clean_item_name(prev)) >= 3
                     and not ignored(prev)
@@ -170,7 +157,7 @@ def count_item_matches(text):
 
 def extract_items_from_lines(lines):
     """
-    Extract receipt item names and prices from OCR lines.
+    Extract receipt item names and prices.
 
     Returns:
 
@@ -191,7 +178,7 @@ def extract_items_from_lines(lines):
         match = price_pattern.search(line)
 
         # ---------------------------------------------------------------
-        # Item and price on the same line
+        # Item and price on same line
         # ---------------------------------------------------------------
 
         if match:
@@ -200,7 +187,7 @@ def extract_items_from_lines(lines):
             price_raw = match.group(2)
 
         # ---------------------------------------------------------------
-        # Item on one line, price on the next line
+        # Item on previous line, price on current line
         # ---------------------------------------------------------------
 
         elif (
@@ -224,6 +211,7 @@ def extract_items_from_lines(lines):
                 continue
 
         else:
+
             i += 1
             continue
 
@@ -232,6 +220,7 @@ def extract_items_from_lines(lines):
         # ---------------------------------------------------------------
 
         if ignored(raw_name):
+
             i += 1
             continue
 
@@ -245,6 +234,7 @@ def extract_items_from_lines(lines):
             r"(\d+\s*@|/ ?I[BL]|/ ?LB|\bI[BL]\b|\bLB\b|\bEACH\b|\bSAVINGS\b)",
             upper_raw,
         ):
+
             i += 1
             continue
 
@@ -262,6 +252,7 @@ def extract_items_from_lines(lines):
             ValueError,
             TypeError,
         ):
+
             i += 1
             continue
 
@@ -270,6 +261,7 @@ def extract_items_from_lines(lines):
         # ---------------------------------------------------------------
 
         if price <= 0 or price > 50:
+
             i += 1
             continue
 
@@ -281,21 +273,15 @@ def extract_items_from_lines(lines):
             raw_name
         )
 
-        # Too short.
         if len(clean) < 4:
+
             i += 1
             continue
 
-        # Mostly digits.
-        #
-        # Example:
-        #
-        #   "2 0"
-        #
-        # or barcode-only garbage.
         if len(
             re.sub(r"\d", "", clean)
         ) < 3:
+
             i += 1
             continue
 
@@ -317,9 +303,6 @@ def extract_items_from_lines(lines):
 # ---------------------------------------------------------------------------
 
 def get_file_hash(filepath):
-    """
-    Return SHA-256 hash of a receipt image.
-    """
 
     hasher = hashlib.sha256()
 
@@ -329,15 +312,13 @@ def get_file_hash(filepath):
     ) as f:
 
         while chunk := f.read(8192):
+
             hasher.update(chunk)
 
     return hasher.hexdigest()
 
 
 def already_processed(cur, filepath):
-    """
-    Determine whether this exact receipt image has already been processed.
-    """
 
     file_hash = get_file_hash(
         filepath
@@ -360,9 +341,6 @@ def mark_processed(
     filename,
     filepath,
 ):
-    """
-    Mark a receipt image as processed.
-    """
 
     file_hash = get_file_hash(
         filepath
@@ -382,6 +360,75 @@ def mark_processed(
 
 
 # ---------------------------------------------------------------------------
+# Receipt record
+# ---------------------------------------------------------------------------
+
+def create_receipt(
+    cur,
+    filename,
+    filepath,
+    store,
+    full_address,
+    receipt_date,
+):
+    """
+    Create the master receipt record.
+
+    Returns the receipt ID.
+
+    This is the parent record for all items found on this receipt.
+    """
+
+    file_hash = get_file_hash(
+        filepath
+    )
+
+    cur.execute(
+        """
+        INSERT OR IGNORE INTO receipts
+        (
+            filename,
+            file_hash,
+            store,
+            full_address,
+            date
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            filename,
+            file_hash,
+            store,
+            full_address,
+            receipt_date,
+        ),
+    )
+
+    # Retrieve the receipt ID whether the row was newly inserted
+    # or already existed.
+
+    cur.execute(
+        """
+        SELECT id
+        FROM receipts
+        WHERE file_hash = ?
+        """,
+        (file_hash,),
+    )
+
+    result = cur.fetchone()
+
+    if not result:
+
+        raise RuntimeError(
+            f"Could not create receipt record "
+            f"for {filename}"
+        )
+
+    return result[0]
+
+
+# ---------------------------------------------------------------------------
 # Image preparation
 # ---------------------------------------------------------------------------
 
@@ -389,9 +436,6 @@ def resize_for_ocr(
     img,
     target_width=OCR_WIDTH,
 ):
-    """
-    Resize an image to a reasonable OCR width.
-    """
 
     h, w = img.shape[:2]
 
@@ -419,9 +463,6 @@ def resize_for_ocr(
 
 
 def prepare_simple_image(image):
-    """
-    Create the primary lightweight OCR image.
-    """
 
     if len(image.shape) == 3:
 
@@ -456,9 +497,6 @@ def run_ocr(
     img,
     psm,
 ):
-    """
-    Run Tesseract OCR.
-    """
 
     ocr_img = resize_for_ocr(
         img
@@ -482,9 +520,6 @@ def ocr_attempt(
     img,
     psm,
 ):
-    """
-    Run one OCR attempt and score the result.
-    """
 
     print(
         f"Method: {img_name} | "
@@ -540,11 +575,6 @@ def ocr_attempt(
 # ---------------------------------------------------------------------------
 
 def detect_store(lines):
-    """
-    Try to identify the store from the beginning of the receipt.
-    """
-
-    store = "Unknown"
 
     for line in lines[:15]:
 
@@ -558,7 +588,7 @@ def detect_store(lines):
 
                 return value
 
-    return store
+    return "Unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -566,9 +596,6 @@ def detect_store(lines):
 # ---------------------------------------------------------------------------
 
 def detect_receipt_date(lines):
-    """
-    Find the first recognizable receipt date.
-    """
 
     for line in lines:
 
@@ -577,6 +604,7 @@ def detect_receipt_date(lines):
         )
 
         if match:
+
             return match.group()
 
     return ""
@@ -587,9 +615,6 @@ def detect_receipt_date(lines):
 # ---------------------------------------------------------------------------
 
 def detect_address(lines):
-    """
-    Attempt to extract the store street address and city/state/ZIP.
-    """
 
     address = ""
     city_state = ""
@@ -656,7 +681,7 @@ def detect_address(lines):
 
 
 # ---------------------------------------------------------------------------
-# Debug OCR output
+# Debug OCR
 # ---------------------------------------------------------------------------
 
 def save_debug_ocr(
@@ -667,11 +692,6 @@ def save_debug_ocr(
     score,
     lines,
 ):
-    """
-    Append OCR output to debug_ocr.txt.
-
-    This can be removed later once the OCR pipeline is stable.
-    """
 
     with open(
         DEBUG_OCR_FILE,
@@ -691,13 +711,14 @@ def save_debug_ocr(
         )
 
         for line in lines:
+
             f.write(
                 line + "\n"
             )
 
 
 # ---------------------------------------------------------------------------
-# Main receipt processing
+# Main processing
 # ---------------------------------------------------------------------------
 
 def process_receipts():
@@ -728,14 +749,14 @@ def process_receipts():
         return
 
     # -----------------------------------------------------------------------
-    # Open receipt database
+    # Database
     # -----------------------------------------------------------------------
 
     conn = get_connection()
     cur = conn.cursor()
 
     # -----------------------------------------------------------------------
-    # Process receipt files
+    # Receipt files
     # -----------------------------------------------------------------------
 
     for filename in sorted(
@@ -757,7 +778,7 @@ def process_receipts():
         )
 
         # ---------------------------------------------------------------
-        # Skip receipts already processed
+        # Already processed?
         # ---------------------------------------------------------------
 
         if already_processed(
@@ -786,7 +807,7 @@ def process_receipts():
         )
 
         # ---------------------------------------------------------------
-        # Read image
+        # Load image
         # ---------------------------------------------------------------
 
         image = cv2.imread(
@@ -804,7 +825,7 @@ def process_receipts():
         results = []
 
         # ---------------------------------------------------------------
-        # 1. Simple OCR path
+        # Simple OCR
         # ---------------------------------------------------------------
 
         simple = prepare_simple_image(
@@ -822,7 +843,7 @@ def process_receipts():
         )
 
         # ---------------------------------------------------------------
-        # 2. Fallback OCR
+        # Fallback OCR
         # ---------------------------------------------------------------
 
         if result[0] < MIN_GOOD_ITEMS:
@@ -878,7 +899,7 @@ def process_receipts():
                     break
 
         # ---------------------------------------------------------------
-        # Make sure we have an OCR result
+        # Select OCR result
         # ---------------------------------------------------------------
 
         if not results:
@@ -888,10 +909,6 @@ def process_receipts():
             )
 
             continue
-
-        # ---------------------------------------------------------------
-        # Select best OCR result
-        # ---------------------------------------------------------------
 
         (
             best_items,
@@ -928,7 +945,7 @@ def process_receipts():
         )
 
         # ---------------------------------------------------------------
-        # Reject obviously empty OCR
+        # Reject empty OCR
         # ---------------------------------------------------------------
 
         if len(
@@ -952,7 +969,7 @@ def process_receipts():
         ]
 
         # ---------------------------------------------------------------
-        # Save debug OCR for now
+        # Save debug OCR
         # ---------------------------------------------------------------
 
         save_debug_ocr(
@@ -965,10 +982,18 @@ def process_receipts():
         )
 
         # ---------------------------------------------------------------
-        # Store
+        # Receipt metadata
         # ---------------------------------------------------------------
 
         store = detect_store(
+            lines
+        )
+
+        receipt_date = detect_receipt_date(
+            lines
+        )
+
+        full_address = detect_address(
             lines
         )
 
@@ -976,24 +1001,8 @@ def process_receipts():
             f"Store: {store}"
         )
 
-        # ---------------------------------------------------------------
-        # Date
-        # ---------------------------------------------------------------
-
-        receipt_date = detect_receipt_date(
-            lines
-        )
-
         print(
             f"Date: {receipt_date}"
-        )
-
-        # ---------------------------------------------------------------
-        # Address
-        # ---------------------------------------------------------------
-
-        full_address = detect_address(
-            lines
         )
 
         print(
@@ -1001,7 +1010,7 @@ def process_receipts():
         )
 
         # ---------------------------------------------------------------
-        # Extract receipt items
+        # Extract items
         # ---------------------------------------------------------------
 
         parsed = extract_items_from_lines(
@@ -1009,20 +1018,51 @@ def process_receipts():
         )
 
         print(
-            f"\nParsed {len(parsed)} receipt items."
+            f"Parsed {len(parsed)} receipt items."
         )
 
         # ---------------------------------------------------------------
-        # Save items
+        # Create receipt record
+        # ---------------------------------------------------------------
+
+        try:
+
+            receipt_id = create_receipt(
+                cur=cur,
+                filename=filename,
+                filepath=path,
+                store=store,
+                full_address=full_address,
+                receipt_date=receipt_date,
+            )
+
+        except Exception as e:
+
+            print(
+                f"Could not create receipt record: {e}"
+            )
+
+            conn.rollback()
+            continue
+
+        print(
+            f"Receipt ID: {receipt_id}"
+        )
+
+        # ---------------------------------------------------------------
+        # Store items
         # ---------------------------------------------------------------
 
         items = []
 
-        for (
+        for line_number, (
             raw_name,
             clean,
             price,
-        ) in parsed:
+        ) in enumerate(
+            parsed,
+            start=1,
+        ):
 
             items.append(
                 (
@@ -1033,8 +1073,10 @@ def process_receipts():
 
             cur.execute(
                 """
-                INSERT OR IGNORE INTO items
+                INSERT INTO items
                 (
+                    receipt_id,
+                    line_number,
                     store,
                     full_address,
                     date,
@@ -1042,9 +1084,11 @@ def process_receipts():
                     clean_name,
                     price
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    receipt_id,
+                    line_number,
                     store,
                     full_address,
                     receipt_date,
@@ -1055,11 +1099,12 @@ def process_receipts():
             )
 
             print(
+                f"{line_number:02d}. "
                 f"{clean} -> ${price:.2f}"
             )
 
         # ---------------------------------------------------------------
-        # Save human-readable list
+        # Human-readable list
         # ---------------------------------------------------------------
 
         append_list(
@@ -1070,7 +1115,7 @@ def process_receipts():
         )
 
         # ---------------------------------------------------------------
-        # Mark receipt as processed
+        # Mark processed
         # ---------------------------------------------------------------
 
         mark_processed(
@@ -1078,6 +1123,10 @@ def process_receipts():
             filename,
             path,
         )
+
+        # ---------------------------------------------------------------
+        # Commit this receipt
+        # ---------------------------------------------------------------
 
         conn.commit()
 
