@@ -1,4 +1,3 @@
-```python
 # receipts_processor.py
 
 import os
