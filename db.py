@@ -13,9 +13,16 @@ DATABASE = "receipts.db"
 def get_connection():
     """
     Open the local receipts database.
+
+    Foreign keys are enabled so receipt -> item relationships
+    are enforced by SQLite.
     """
 
-    return sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE)
+
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    return conn
 
 
 # ---------------------------------------------------------------------------
@@ -24,39 +31,79 @@ def get_connection():
 
 def init_db():
     """
-    Create the receipt-side database tables and indexes.
+    Initialize / migrate the receipt database.
 
-    receipts.db is the historical/raw receipt database.
+    receipts.db stores historical receipt observations.
 
-    It should contain what the OCR system actually found.
+    It is NOT the master product database.
 
-    Product comparison and canonical product information will eventually
-    live in master.db.
+    The future structure will be:
+
+        receipts.db
+            receipts
+                |
+                +--- items
+
+        master.db
+            products
+                |
+                +--- aliases
+                +--- identifiers
+                +--- price history
     """
 
     conn = get_connection()
     cur = conn.cursor()
 
     # -----------------------------------------------------------------------
+    # Receipts
+    # -----------------------------------------------------------------------
+    #
+    # One row represents one physical receipt image.
+    #
+    # This gives every receipt its own identity.
+    #
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS receipts(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            filename TEXT,
+
+            file_hash TEXT UNIQUE,
+
+            store TEXT,
+
+            full_address TEXT,
+
+            date TEXT,
+
+            created_date
+                TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    # -----------------------------------------------------------------------
     # Receipt items
     # -----------------------------------------------------------------------
     #
-    # Each row represents an item found on a receipt.
+    # Existing databases may already have this table.
     #
-    # IMPORTANT:
-    # raw_name is what OCR/parser originally saw.
-    #
-    # clean_name is the cleaned version used by the current parser.
-    #
-    # We intentionally do NOT store canonical product information here.
-    #
-    # That belongs in master.db.
+    # We therefore create it first, then add the new columns below
+    # if they don't already exist.
     #
 
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS items(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            receipt_id INTEGER,
+
+            line_number INTEGER,
 
             store TEXT,
 
@@ -68,42 +115,104 @@ def init_db():
 
             clean_name TEXT NOT NULL,
 
-            price REAL
+            price REAL,
+
+            FOREIGN KEY(receipt_id)
+                REFERENCES receipts(id)
+                ON DELETE CASCADE
         )
         """
     )
 
     # -----------------------------------------------------------------------
-    # Prevent duplicate receipt items
+    # Migrate an older items table
     # -----------------------------------------------------------------------
     #
-    # This is retained from the previous version.
+    # If your existing items table was created by the older version,
+    # receipt_id and line_number won't exist.
     #
-    # NOTE:
-    # Two genuinely separate purchases of the same item at the same price
-    # on the same receipt could theoretically collide here.
+    # SQLite allows us to add these columns without destroying existing data.
     #
-    # We'll improve receipt identity later if needed.
+
+    cur.execute(
+        "PRAGMA table_info(items)"
+    )
+
+    existing_columns = {
+        row[1]
+        for row in cur.fetchall()
+    }
+
+    if "receipt_id" not in existing_columns:
+
+        cur.execute(
+            """
+            ALTER TABLE items
+            ADD COLUMN receipt_id INTEGER
+            """
+        )
+
+    if "line_number" not in existing_columns:
+
+        cur.execute(
+            """
+            ALTER TABLE items
+            ADD COLUMN line_number INTEGER
+            """
+        )
+
+    # -----------------------------------------------------------------------
+    # Remove old item uniqueness rule
+    # -----------------------------------------------------------------------
+    #
+    # The previous database used:
+    #
+    #     store + address + date + clean_name + price
+    #
+    # as a unique combination.
+    #
+    # That is not appropriate once we track individual receipts.
+    #
+    # For example, two identical products bought on two different receipts
+    # should remain two separate historical observations.
     #
 
     cur.execute(
         """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_items
-        ON items(
-            store,
-            full_address,
-            date,
-            clean_name,
-            price
-        )
+        DROP INDEX IF EXISTS idx_items
         """
     )
 
     # -----------------------------------------------------------------------
-    # Processed receipt files
+    # Item indexes
+    # -----------------------------------------------------------------------
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_items_receipt
+        ON items(receipt_id)
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_items_name
+        ON items(clean_name)
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_items_store
+        ON items(store)
+        """
+    )
+
+    # -----------------------------------------------------------------------
+    # Processed files
     # -----------------------------------------------------------------------
     #
-    # This prevents the same image from being processed repeatedly.
+    # This continues to prevent the same image from being processed twice.
     #
 
     cur.execute(
@@ -126,19 +235,11 @@ def init_db():
     # OLD PRODUCTS TABLE
     # -----------------------------------------------------------------------
     #
-    # This table is kept temporarily for compatibility with older versions
-    # of SmartCart.
+    # Keep this temporarily for compatibility with an existing database.
     #
-    # NEW CODE SHOULD NOT USE THIS TABLE.
+    # NEW code should NOT use this table.
     #
-    # The future master product database will live in:
-    #
-    #     master.db
-    #
-    # and will be populated by compare_products.py.
-    #
-    # We are deliberately not deleting this table yet because an existing
-    # receipts.db may already contain product information.
+    # Eventually this will be replaced by master.db.
     #
 
     cur.execute(
@@ -161,7 +262,6 @@ def init_db():
         """
     )
 
-    # UPC index
     cur.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_products_upc
@@ -170,7 +270,6 @@ def init_db():
         """
     )
 
-    # SKU index
     cur.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_products_sku
@@ -178,7 +277,6 @@ def init_db():
         """
     )
 
-    # PLU index
     cur.execute(
         """
         CREATE INDEX IF NOT EXISTS idx_products_plu
@@ -187,7 +285,7 @@ def init_db():
     )
 
     # -----------------------------------------------------------------------
-    # Commit
+    # Commit changes
     # -----------------------------------------------------------------------
 
     conn.commit()
