@@ -5,6 +5,7 @@ from compare_products import run_comparison
 
 def main():
     init_db()
+    create_master_db()
     process_receipts()
     run_import()
     run_comparison()
