@@ -237,6 +237,65 @@ def create_master_db():
                 ON DELETE CASCADE
         )
     """)
+    # ---------------------------------------------------------
+    # Possible observation-to-observation matches
+    #
+    # These represent evidence that two receipt observations
+    # may refer to the same underlying product.
+    #
+    # They are intentionally separate from match_candidates,
+    # which compares an observation against an existing
+    # canonical product.
+    # ---------------------------------------------------------
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS observation_matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            observation_id_a INTEGER NOT NULL,
+            observation_id_b INTEGER NOT NULL,
+
+            confidence REAL NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+
+            created_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            reviewed_date TEXT,
+
+            FOREIGN KEY (observation_id_a)
+                REFERENCES product_observations(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (observation_id_b)
+                REFERENCES product_observations(id)
+                ON DELETE CASCADE,
+
+            UNIQUE (
+                observation_id_a,
+                observation_id_b
+            )
+        )
+    """)
+
+    # ---------------------------------------------------------
+    # Evidence explaining observation-to-observation matches
+    # ---------------------------------------------------------
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS observation_match_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            match_id INTEGER NOT NULL,
+
+            evidence_type TEXT NOT NULL,
+            score REAL,
+            details TEXT,
+
+            created_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (match_id)
+                REFERENCES observation_matches(id)
+                ON DELETE CASCADE
+        )
+    """)
+
 
     # ---------------------------------------------------------
     # History of changes to canonical products
@@ -327,6 +386,26 @@ def create_master_db():
         CREATE INDEX IF NOT EXISTS idx_evidence_candidate
         ON match_evidence(candidate_id)
     """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_observation_matches_a
+        ON observation_matches(observation_id_a)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_observation_matches_b
+        ON observation_matches(observation_id_b)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_observation_matches_status
+        ON observation_matches(status)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_observation_match_evidence_match
+        ON observation_match_evidence(match_id)
+    """)
+
 
     conn.commit()
     conn.close()
