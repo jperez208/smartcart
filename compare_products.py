@@ -231,68 +231,6 @@ def evidence_exists(
 
     return cursor.fetchone() is not None
 
-
-# ---------------------------------------------------------------------------
-# Observation-pair table
-#
-# The existing schema does not currently have a table for observation-to-
-# observation candidates.
-#
-# We create one here rather than misusing match_candidates.
-# ---------------------------------------------------------------------------
-
-def ensure_observation_matches_table(conn):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS observation_matches (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            observation_id_a INTEGER NOT NULL,
-            observation_id_b INTEGER NOT NULL,
-
-            confidence REAL NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-
-            created_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            reviewed_date TEXT,
-
-            FOREIGN KEY (observation_id_a)
-                REFERENCES product_observations(id)
-                ON DELETE CASCADE,
-
-            FOREIGN KEY (observation_id_b)
-                REFERENCES product_observations(id)
-                ON DELETE CASCADE,
-
-            UNIQUE (
-                observation_id_a,
-                observation_id_b
-            )
-        )
-        """
-    )
-
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS observation_match_evidence (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            match_id INTEGER NOT NULL,
-
-            evidence_type TEXT NOT NULL,
-            score REAL,
-            details TEXT,
-
-            created_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-            FOREIGN KEY (match_id)
-                REFERENCES observation_matches(id)
-                ON DELETE CASCADE
-        )
-        """
-    )
-
-
 # ---------------------------------------------------------------------------
 # Observation match creation
 # ---------------------------------------------------------------------------
@@ -970,11 +908,6 @@ def run_comparison():
     )
 
     try:
-
-        ensure_observation_matches_table(
-            master_conn
-        )
-
         (
             matches_created,
             evidence_created,
