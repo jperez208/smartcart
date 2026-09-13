@@ -1000,21 +1000,6 @@ def assign_observation_to_product(
         ),
     )
 
-(
-    candidates_created,
-    candidate_evidence_created,
-) = create_strong_identifier_candidates(
-    master_conn
-)
-print(
-    f"New product candidates:    "
-    f"{candidates_created}"
-)
-
-print(
-    f"New candidate evidence:    "
-    f"{candidate_evidence_created}"
-)
 def build_master_products(
     master_conn,
 ):
@@ -1170,11 +1155,33 @@ def build_master_products(
             names_added += 1
 
     return (
-        products_created,
-        observations_assigned,
-        identifiers_added,
-        names_added,
-    )
+            products_created,
+            observations_assigned,
+            identifiers_added,
+            names_added,
+        ) = build_master_products(
+            master_conn
+        )
+
+        (
+            candidates_created,
+            candidate_evidence_created,
+        ) = create_strong_identifier_candidates(
+            master_conn
+        )
+
+        print(
+            f"New product candidates:     "
+            f"{candidates_created}"
+        )
+
+        print(
+            f"New candidate evidence:     "
+            f"{candidate_evidence_created}"
+        )
+
+        master_conn.commit()
+
 def create_strong_identifier_candidates(
     master_conn,
 ):
