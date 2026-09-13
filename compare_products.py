@@ -209,21 +209,21 @@ def candidate_exists(
 
 def evidence_exists(
     cursor,
-    candidate_id,
+    match_id,
     evidence_type,
     details,
 ):
     cursor.execute(
         """
         SELECT id
-        FROM match_evidence
-        WHERE candidate_id = ?
+        FROM observation_match_evidence
+        WHERE match_id = ?
           AND evidence_type = ?
           AND details = ?
         LIMIT 1
         """,
         (
-            candidate_id,
+            match_id,
             evidence_type,
             details,
         ),
