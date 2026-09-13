@@ -1159,7 +1159,7 @@ def build_master_products(
         observations_assigned,
         identifiers_added,
         names_added,
-    )
+        )
 
 
         master_conn.commit()
