@@ -202,6 +202,283 @@ def candidate_exists(
 
     return row[0] if row else None
 
+# ---------------------------------------------------------------------------
+# Strong-identifier candidate discovery
+# ---------------------------------------------------------------------------
+
+STRONG_CANDIDATE_IDENTIFIER_TYPES = {
+    "UPC",
+    "EAN",
+    "SKU",
+}
+
+
+def get_unmatched_observations(master_conn):
+    """
+    Return observations that have not yet been assigned to
+    a master product.
+
+    Existing product assignments are never reconsidered here.
+    """
+
+    cursor = master_conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            raw_name,
+            clean_name,
+            price,
+            store,
+            full_address,
+            date
+        FROM product_observations
+        WHERE product_id IS NULL
+          AND match_status = 'unmatched'
+        ORDER BY id
+        """
+    )
+
+    return cursor.fetchall()
+
+
+def find_strong_identifier_candidates(
+    cursor,
+    observation_id,
+):
+    """
+    Find existing master products whose confirmed identifier
+    exactly matches a strong identifier observed on this receipt.
+
+    PLUs are deliberately excluded.
+    """
+
+    cursor.execute(
+        """
+        SELECT
+            oi.identifier_type,
+            oi.identifier_value,
+            oi.confidence
+        FROM observation_identifiers oi
+        WHERE oi.observation_id = ?
+        """,
+        (
+            observation_id,
+        ),
+    )
+
+    observed_identifiers = cursor.fetchall()
+
+    candidates = []
+
+    for observed in observed_identifiers:
+
+        interpreted_type = classify_identifier(
+            observed["identifier_type"],
+            observed["identifier_value"],
+        )
+
+        if interpreted_type not in (
+            STRONG_CANDIDATE_IDENTIFIER_TYPES
+        ):
+            continue
+
+        value = str(
+            observed["identifier_value"]
+        ).strip()
+
+        cursor.execute(
+            """
+            SELECT
+                i.product_id,
+                i.identifier_type,
+                i.identifier_value,
+                i.confidence
+            FROM identifiers i
+            WHERE i.identifier_type = ?
+              AND i.identifier_value = ?
+            """,
+            (
+                interpreted_type,
+                value,
+            ),
+        )
+
+        for product_identifier in cursor.fetchall():
+
+            candidates.append(
+                {
+                    "product_id":
+                        product_identifier["product_id"],
+
+                    "identifier_type":
+                        interpreted_type,
+
+                    "identifier_value":
+                        value,
+
+                    "observation_confidence":
+                        (
+                            observed["confidence"]
+                            if observed["confidence"] is not None
+                            else 0.50
+                        ),
+
+                    "product_identifier_confidence":
+                        (
+                            product_identifier["confidence"]
+                            if product_identifier["confidence"]
+                            is not None
+                            else 1.0
+                        ),
+                }
+            )
+
+    return candidates
+
+
+def create_strong_identifier_candidate(
+    cursor,
+    observation_id,
+    candidate,
+):
+    """
+    Create a pending observation -> product candidate and
+    record the exact identifier evidence.
+
+    This function NEVER assigns the observation.
+    """
+
+    candidate_id = candidate_exists(
+        cursor,
+        observation_id,
+        candidate["product_id"],
+    )
+
+    if candidate_id is None:
+
+        cursor.execute(
+            """
+            INSERT INTO match_candidates (
+                observation_id,
+                candidate_product_id,
+                confidence,
+                status
+            )
+            VALUES (?, ?, ?, 'pending')
+            """,
+            (
+                observation_id,
+                candidate["product_id"],
+                0.0,
+            ),
+        )
+
+        candidate_id = cursor.lastrowid
+
+    details = (
+        f"Exact {candidate['identifier_type']} match: "
+        f"{candidate['identifier_value']}"
+    )
+
+    evidence_added = False
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM match_evidence
+        WHERE candidate_id = ?
+          AND evidence_type = ?
+          AND details = ?
+        LIMIT 1
+        """,
+        (
+            candidate_id,
+            "exact_identifier",
+            details,
+        ),
+    )
+
+    if cursor.fetchone() is None:
+
+        cursor.execute(
+            """
+            INSERT INTO match_evidence (
+                candidate_id,
+                evidence_type,
+                score,
+                details
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                candidate_id,
+                "exact_identifier",
+                identifier_weight(
+                    candidate["identifier_type"]
+                ),
+                details,
+            ),
+        )
+
+        evidence_added = True
+
+    extraction_score = (
+        float(
+            candidate["observation_confidence"]
+        )
+        *
+        float(
+            candidate["product_identifier_confidence"]
+        )
+    )
+
+    extraction_details = (
+        "Identifier confidence: "
+        f"{candidate['observation_confidence']:.2f} / "
+        f"{candidate['product_identifier_confidence']:.2f}"
+    )
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM match_evidence
+        WHERE candidate_id = ?
+          AND evidence_type = ?
+          AND details = ?
+        LIMIT 1
+        """,
+        (
+            candidate_id,
+            "identifier_confidence",
+            extraction_details,
+        ),
+    )
+
+    if cursor.fetchone() is None:
+
+        cursor.execute(
+            """
+            INSERT INTO match_evidence (
+                candidate_id,
+                evidence_type,
+                score,
+                details
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                candidate_id,
+                "identifier_confidence",
+                extraction_score,
+                extraction_details,
+            ),
+        )
+
+        evidence_added = True
+
+    return candidate_id, evidence_added
 
 # ---------------------------------------------------------------------------
 # Evidence helpers
@@ -723,7 +1000,21 @@ def assign_observation_to_product(
         ),
     )
 
+(
+    candidates_created,
+    candidate_evidence_created,
+) = create_strong_identifier_candidates(
+    master_conn
+)
+print(
+    f"New product candidates:    "
+    f"{candidates_created}"
+)
 
+print(
+    f"New candidate evidence:    "
+    f"{candidate_evidence_created}"
+)
 def build_master_products(
     master_conn,
 ):
@@ -883,6 +1174,63 @@ def build_master_products(
         observations_assigned,
         identifiers_added,
         names_added,
+    )
+def create_strong_identifier_candidates(
+    master_conn,
+):
+    """
+    Generate pending candidates for currently unmatched
+    observations using only exact UPC/EAN/SKU evidence.
+
+    No observations are assigned here.
+    """
+
+    observations = get_unmatched_observations(
+        master_conn
+    )
+
+    cursor = master_conn.cursor()
+
+    candidates_created = 0
+    evidence_created = 0
+
+    for observation in observations:
+
+        candidates = find_strong_identifier_candidates(
+            cursor,
+            observation["id"],
+        )
+
+        for candidate in candidates:
+
+            candidate_id = candidate_exists(
+                cursor,
+                observation["id"],
+                candidate["product_id"],
+            )
+
+            was_new_candidate = (
+                candidate_id is None
+            )
+
+            (
+                candidate_id,
+                evidence_added,
+            ) = create_strong_identifier_candidate(
+                cursor,
+                observation["id"],
+                candidate,
+            )
+
+            if was_new_candidate:
+                candidates_created += 1
+
+            if evidence_added:
+                evidence_created += 1
+
+    return (
+        candidates_created,
+        evidence_created,
     )
 
 # ---------------------------------------------------------------------------
