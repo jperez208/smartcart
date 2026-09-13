@@ -1155,30 +1155,12 @@ def build_master_products(
             names_added += 1
 
     return (
-            products_created,
-            observations_assigned,
-            identifiers_added,
-            names_added,
-        ) = build_master_products(
-            master_conn
-        )
+        products_created,
+        observations_assigned,
+        identifiers_added,
+        names_added,
+    )
 
-        (
-            candidates_created,
-            candidate_evidence_created,
-        ) = create_strong_identifier_candidates(
-            master_conn
-        )
-
-        print(
-            f"New product candidates:     "
-            f"{candidates_created}"
-        )
-
-        print(
-            f"New candidate evidence:     "
-            f"{candidate_evidence_created}"
-        )
 
         master_conn.commit()
 
