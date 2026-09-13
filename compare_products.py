@@ -1159,10 +1159,10 @@ def build_master_products(
         observations_assigned,
         identifiers_added,
         names_added,
-        )
+           )
 
 
-        master_conn.commit()
+    master_conn.commit()
 
 def create_strong_identifier_candidates(
     master_conn,
