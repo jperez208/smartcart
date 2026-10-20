@@ -65,9 +65,9 @@ price_only_pattern = re.compile(
 
 date_pattern = re.compile(
     r"\b(?:"
-    r"(?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|[12]\d|3[01])[-/.](?:\d{2}|\d{4})"
+    r"(?:0?[1-9]|1[0-2])[-/.](?:0?[1-9]|\d|3)[-/.](?:\d{2}|\d{4})"
     r"|"
-    r"(?:0?[1-9]|[12]\d|3[01])[-/.](?:0?[1-9]|1[0-2])[-/.](?:\d{2}|\d{4})"
+    r"(?:0?[1-9]|\d|3)[-/.](?:0?[1-9]|1[0-2])[-/.](?:\d{2}|\d{4})"
     r")\b"
 )
 
@@ -371,8 +371,7 @@ def create_receipt(
 ):
     """
     Create the master receipt record.
-    Returns the receipt ID.
-    This is the parent record for all items found on this receipt.
+    Returns the receipt ID row.
     """
 
     file_hash = get_file_hash(
@@ -418,27 +417,27 @@ def process_single_file_worker(filename):
     """
     filepath = os.path.join(RECEIPT_FOLDER, filename)
     
-    # 1. Skip non-image system configuration artifacts
     if not filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp')):
         return None
 
     try:
-        # 2. Run Image Preprocessing
-        # Note: --oem 3 uses maximum accuracy LSTM models since engine speed isn't a bottleneck anymore
         tesseract_config = r'--oem 3 --psm 6'
-        
-        # Preprocess variation loop 
         best_text = ""
         best_count = -1
         
-        # Pull original scan
         img = cv2.imread(filepath)
         if img is None:
             return None
             
-        # Standard configuration check
         text = pytesseract.image_to_string(img, config=tesseract_config)
         count = count_item_matches(text)
         if count > best_count:
             best_count = count
             best_text = text
+
+        if best_count < MIN_GOOD_ITEMS:
+            for variant in FALLBACK_VARIANT_NAMES:
+                processed_img = preprocess_receipt(filepath, variant, OCR_WIDTH)
+                if processed_img is not None:
+                    v_text = pytesseract.image_to_string(processed_img, config=tesseract_config)
+                    v_count = count_item_matches(v_text)
